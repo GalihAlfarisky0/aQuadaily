@@ -1,0 +1,50 @@
+[versions]
+agp = "9.1.1"
+kotlin = "2.2.10"
+core = "1.17.0"
+appcompat = "1.7.1"
+material = "1.13.0"
+activity = "1.11.0"
+constraint = "2.2.1"
+lifecycle = "2.9.4"
+navigation = "2.9.3"
+room = "2.7.2"
+coroutines = "1.10.2"
+splash = "1.0.1"
+ksp = "2.3.2"
+junit = "4.13.2"
+androidx-test-ext-junit = "1.2.1"
+androidx-test-espresso = "3.6.1"
+androidx-test-runner = "1.7.0"
+google-auth = "21.3.0"
+mpandroidchart = "3.1.0"
+glide = "4.16.0"
+
+[libraries]
+core-ktx = { module="androidx.core:core-ktx", version.ref="core" }
+appcompat = { module="androidx.appcompat:appcompat", version.ref="appcompat"}
+material = { module="com.google.android.material:material", version.ref="material"}
+activity = { module="androidx.activity:activity-ktx", version.ref="activity"}
+constraintlayout = { module="androidx.constraintlayout:constraintlayout", version.ref="constraint"}
+lifecycle-viewmodel = { module="androidx.lifecycle:lifecycle-viewmodel-ktx", version.ref="lifecycle"}
+lifecycle-livedata = { module="androidx.lifecycle:lifecycle-livedata-ktx", version.ref="lifecycle"}
+navigation-fragment = { module="androidx.navigation:navigation-fragment-ktx", version.ref="navigation"}
+navigation-ui = { module="androidx.navigation:navigation-ui-ktx", version.ref="navigation"}
+room-runtime = { module="androidx.room:room-runtime", version.ref="room"}
+room-ktx = { module="androidx.room:room-ktx", version.ref="room"}
+room-compiler = { module="androidx.room:room-compiler", version.ref="room"}
+coroutines = { module="org.jetbrains.kotlinx:kotlinx-coroutines-android", version.ref="coroutines"}
+splashscreen = { module="androidx.core:core-splashscreen", version.ref="splash"}
+junit = { group = "junit", name = "junit", version.ref = "junit" }
+test-ext-junit = { group = "androidx.test.ext", name = "junit", version.ref = "androidx-test-ext-junit" }
+test-espresso-core = { group = "androidx.test.espresso", name = "espresso-core", version.ref = "androidx-test-espresso" }
+test-runner = { group = "androidx.test", name = "runner", version.ref = "androidx-test-runner" }
+play-services-auth = { group = "com.google.android.gms", name = "play-services-auth", version.ref = "google-auth" }
+mpandroidchart = { module = "com.github.PhilJay:MPAndroidChart", version.ref = "mpandroidchart" }
+glide = { module = "com.github.bumptech.glide:glide", version.ref = "glide" }
+glide-compiler = { module = "com.github.bumptech.glide:compiler", version.ref = "glide" }
+
+[plugins]
+android-application = { id="com.android.application", version.ref="agp"}
+kotlin-android = { id="org.jetbrains.kotlin.android", version.ref="kotlin"}
+ksp = { id="com.google.devtools.ksp", version.ref="ksp"}
