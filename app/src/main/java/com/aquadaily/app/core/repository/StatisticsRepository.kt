@@ -6,19 +6,20 @@ import com.aquadaily.app.core.database.model.DailyWater
 import com.aquadaily.app.core.database.model.MonthlyWater
 
 class StatisticsRepository(
-    private val historyDao: HistoryDao
+    private val historyDao: HistoryDao,
+    private val userId: Int
 ) {
 
     val dailyWater: LiveData<List<DailyWater>> =
-        historyDao.getDailyWater()
+        historyDao.getDailyWater(userId)
 
     val monthlyWater: LiveData<List<MonthlyWater>> =
-        historyDao.getMonthlyWater()
+        historyDao.getMonthlyWater(userId)
 
     fun getWeeklyWater(
         startDate: String,
         endDate: String
     ): LiveData<List<DailyWater>> {
-        return historyDao.getWeeklyWater(startDate, endDate)
+        return historyDao.getWeeklyWater(userId, startDate, endDate)
     }
 }
