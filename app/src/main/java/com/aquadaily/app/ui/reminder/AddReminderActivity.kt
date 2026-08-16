@@ -7,6 +7,7 @@ import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
 import com.aquadaily.app.App
 import com.aquadaily.app.core.database.entity.ReminderEntity
+import com.aquadaily.app.core.preferences.PreferencesManager
 import com.aquadaily.app.databinding.ActivityAddReminderBinding
 import com.google.android.material.transition.platform.MaterialContainerTransform
 import com.google.android.material.transition.platform.MaterialContainerTransformSharedElementCallback
@@ -14,21 +15,32 @@ import com.google.android.material.transition.platform.MaterialContainerTransfor
 class AddReminderActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityAddReminderBinding
+    private lateinit var preferences: PreferencesManager
+
     private val viewModel: ReminderViewModel by viewModels {
         val app = application as App
-        ReminderViewModel.Factory(app.reminderRepository, app.alarmScheduler)
+        ReminderViewModel.Factory(
+            app.reminderRepository,
+            app.alarmScheduler,
+            PreferencesManager(applicationContext).getCurrentUserId()
+        )
     }
 
     private var reminderId: Int = -1
 
     override fun onCreate(savedInstanceState: Bundle?) {
         window.requestFeature(Window.FEATURE_ACTIVITY_TRANSITIONS)
-        
         super.onCreate(savedInstanceState)
+
+        preferences = PreferencesManager(this)
+        if (!preferences.isLoggedIn()) {
+            finish()
+            return
+        }
+
         binding = ActivityAddReminderBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        // Setup transitions after binding is initialized
         setEnterSharedElementCallback(MaterialContainerTransformSharedElementCallback())
         window.sharedElementEnterTransition = MaterialContainerTransform().apply {
             addTarget(binding.scrollView)
@@ -57,42 +69,38 @@ class AddReminderActivity : AppCompatActivity() {
                 binding.timePicker.hour = it.hour
                 binding.timePicker.minute = it.minute
                 binding.etAmount.setText(it.amount.toString())
-                
+
                 val daysArray = resources.getStringArray(com.aquadaily.app.R.array.days_array)
                 val dayIndex = daysArray.indexOf(it.day)
-                if (dayIndex >= 0) {
-                    binding.spinnerDay.setSelection(dayIndex)
-                }
+                if (dayIndex >= 0) binding.spinnerDay.setSelection(dayIndex)
             }
         }
     }
 
     private fun initListener() {
-        binding.btnBack.setOnClickListener {
-            finish()
-        }
-        binding.btnSave.setOnClickListener {
-            saveReminder()
-        }
+        binding.btnBack.setOnClickListener { finish() }
+        binding.btnSave.setOnClickListener { saveReminder() }
     }
 
     private fun saveReminder() {
-        val hour = binding.timePicker.hour
-        val minute = binding.timePicker.minute
-        val day = binding.spinnerDay.selectedItem.toString()
-        val amountStr = binding.etAmount.text.toString()
-
-        if (amountStr.isEmpty()) {
-            Toast.makeText(this, "Please enter water amount", Toast.LENGTH_SHORT).show()
+        val amount = binding.etAmount.text.toString().toIntOrNull()
+        if (amount == null || amount <= 0) {
+            Toast.makeText(this, "Please enter a valid water amount", Toast.LENGTH_SHORT).show()
             return
         }
 
-        val amount = amountStr.toIntOrNull() ?: 0
+        val userId = preferences.getCurrentUserId()
+        if (userId <= 0) {
+            Toast.makeText(this, "Please log in first", Toast.LENGTH_SHORT).show()
+            return
+        }
+
         val reminder = ReminderEntity(
             id = if (reminderId != -1) reminderId else 0,
-            hour = hour,
-            minute = minute,
-            day = day,
+            userId = userId,
+            hour = binding.timePicker.hour,
+            minute = binding.timePicker.minute,
+            day = binding.spinnerDay.selectedItem.toString(),
             amount = amount,
             isEnabled = true
         )
@@ -104,6 +112,7 @@ class AddReminderActivity : AppCompatActivity() {
             viewModel.insertReminder(reminder)
             Toast.makeText(this, "Reminder saved", Toast.LENGTH_SHORT).show()
         }
+
         finish()
     }
 }
