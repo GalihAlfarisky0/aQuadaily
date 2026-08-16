@@ -9,6 +9,8 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.aquadaily.app.core.database.AppDatabase
 import com.aquadaily.app.core.database.entity.HistoryEntity
+import com.aquadaily.app.core.database.model.DailyWater
+import com.aquadaily.app.core.preferences.PreferencesManager
 import com.aquadaily.app.core.repository.HistoryRepository
 import com.aquadaily.app.databinding.ActivityAddHistoryBinding
 import kotlinx.coroutines.launch
@@ -19,29 +21,35 @@ import java.util.Locale
 class AddHistoryActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityAddHistoryBinding
-    
+    private lateinit var preferences: PreferencesManager
+    private var historyId: Int = 0
+
     private val viewModel: HistoryViewModel by viewModels {
         val database = AppDatabase.getInstance(applicationContext)
-        val repository = HistoryRepository(database.historyDao())
-        HistoryViewModelFactory(repository)
+        HistoryViewModelFactory(
+            HistoryRepository(database.historyDao()),
+            PreferencesManager(applicationContext).getCurrentUserId()
+        )
     }
-
-    private var historyId: Int = 0
 
     private val storageFormatter = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
     private val displayFormatter = SimpleDateFormat("dd-MM-yyyy", Locale.getDefault())
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        preferences = PreferencesManager(this)
+        if (!preferences.isLoggedIn()) {
+            finish()
+            return
+        }
+
         binding = ActivityAddHistoryBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        // Ambil ID jika dalam mode Edit
         historyId = intent.getIntExtra("EXTRA_HISTORY_ID", 0)
-
         setupDateTimePickers()
         setupListeners()
-        
+
         if (historyId != 0) {
             binding.tvAddTitle.text = "Edit History"
             binding.btnSaveHistory.text = "Update Record"
@@ -53,7 +61,6 @@ class AddHistoryActivity : AppCompatActivity() {
         lifecycleScope.launch {
             val history = viewModel.getHistoryById(historyId)
             history?.let {
-                // Convert yyyy-MM-dd to dd-MM-yyyy for display
                 val date = storageFormatter.parse(it.date)
                 binding.etDate.setText(if (date != null) displayFormatter.format(date) else it.date)
                 binding.etTime.setText(it.time)
@@ -65,54 +72,72 @@ class AddHistoryActivity : AppCompatActivity() {
 
     private fun setupDateTimePickers() {
         val calendar = Calendar.getInstance()
-        
-        // Default values for new record
+
         if (historyId == 0) {
             binding.etDate.setText(displayFormatter.format(calendar.time))
-            binding.etTime.setText(String.format(Locale.getDefault(), "%02d:%02d", 
-                calendar.get(Calendar.HOUR_OF_DAY), calendar.get(Calendar.MINUTE)))
+            binding.etTime.setText(
+                String.format(
+                    Locale.getDefault(),
+                    "%02d:%02d",
+                    calendar.get(Calendar.HOUR_OF_DAY),
+                    calendar.get(Calendar.MINUTE)
+                )
+            )
         }
 
         binding.etDate.setOnClickListener {
             val dateStr = binding.etDate.text.toString()
-            val date = try { displayFormatter.parse(dateStr) } catch (e: Exception) { null }
-            date?.let { calendar.time = it }
+            try {
+                displayFormatter.parse(dateStr)?.let { calendar.time = it }
+            } catch (_: Exception) {
+            }
 
-            DatePickerDialog(this, { _, y, m, d ->
-                calendar.set(y, m, d)
-                binding.etDate.setText(displayFormatter.format(calendar.time))
-            }, calendar.get(Calendar.YEAR), calendar.get(Calendar.MONTH), calendar.get(Calendar.DAY_OF_MONTH)).show()
+            DatePickerDialog(
+                this,
+                { _, y, m, d ->
+                    calendar.set(y, m, d)
+                    binding.etDate.setText(displayFormatter.format(calendar.time))
+                },
+                calendar.get(Calendar.YEAR),
+                calendar.get(Calendar.MONTH),
+                calendar.get(Calendar.DAY_OF_MONTH)
+            ).show()
         }
 
         binding.etTime.setOnClickListener {
-            val timeParts = binding.etTime.text.toString().split(":")
-            val hour = if (timeParts.size == 2) timeParts[0].toInt() else calendar.get(Calendar.HOUR_OF_DAY)
-            val minute = if (timeParts.size == 2) timeParts[1].toInt() else calendar.get(Calendar.MINUTE)
+            val parts = binding.etTime.text.toString().split(":")
+            val hour = if (parts.size == 2) parts[0].toIntOrNull() ?: calendar.get(Calendar.HOUR_OF_DAY) else calendar.get(Calendar.HOUR_OF_DAY)
+            val minute = if (parts.size == 2) parts[1].toIntOrNull() ?: calendar.get(Calendar.MINUTE) else calendar.get(Calendar.MINUTE)
 
-            TimePickerDialog(this, { _, h, m ->
-                binding.etTime.setText(String.format(Locale.getDefault(), "%02d:%02d", h, m))
-            }, hour, minute, true).show()
+            TimePickerDialog(
+                this,
+                { _, h, m -> binding.etTime.setText(String.format(Locale.getDefault(), "%02d:%02d", h, m)) },
+                hour,
+                minute,
+                true
+            ).show()
         }
     }
 
     private fun setupListeners() {
         binding.btnSaveHistory.setOnClickListener {
-            val amount = binding.etAmount.text.toString()
-            if (amount.isEmpty()) {
-                Toast.makeText(this, "Masukkan jumlah air", Toast.LENGTH_SHORT).show()
+            val amount = binding.etAmount.text.toString().toIntOrNull()
+            if (amount == null || amount <= 0) {
+                Toast.makeText(this, "Masukkan jumlah air yang valid", Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
 
-            // Convert display date back to storage format
             val displayDate = binding.etDate.text.toString()
-            val date = try { displayFormatter.parse(displayDate) } catch (e: Exception) { null }
+            val date = try { displayFormatter.parse(displayDate) } catch (_: Exception) { null }
             val storageDate = if (date != null) storageFormatter.format(date) else displayDate
+            val userId = preferences.getCurrentUserId()
 
             val history = HistoryEntity(
                 id = historyId,
+                userId = userId,
                 date = storageDate,
                 time = binding.etTime.text.toString(),
-                amount = amount.toInt(),
+                amount = amount,
                 note = binding.etNote.text.toString()
             )
 
