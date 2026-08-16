@@ -1,6 +1,5 @@
 package com.aquadaily.app.ui.settings
 
-import android.app.TimePickerDialog
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
@@ -14,6 +13,8 @@ import androidx.lifecycle.asLiveData
 import com.aquadaily.app.core.database.AppDatabase
 import com.aquadaily.app.core.database.entity.UserEntity
 import com.aquadaily.app.core.preferences.PreferencesManager
+import com.aquadaily.app.core.repository.HistoryRepository
+import com.aquadaily.app.core.repository.ReminderRepository
 import com.aquadaily.app.core.repository.UserRepository
 import com.aquadaily.app.animation.DashboardAnimation
 import com.aquadaily.app.animation.BottomNavAnimation
@@ -22,7 +23,6 @@ import com.aquadaily.app.ui.login.LoginActivity
 import com.bumptech.glide.Glide
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.textfield.TextInputEditText
-import java.util.Calendar
 
 class SettingsActivity : AppCompatActivity() {
 
@@ -37,11 +37,22 @@ class SettingsActivity : AppCompatActivity() {
         setContentView(binding.root)
 
         preferences = PreferencesManager(this)
+        val userId = preferences.getCurrentUserId()
+        if (userId <= 0 || !preferences.isLoggedIn()) {
+            logout()
+            return
+        }
 
         val database = AppDatabase.getInstance(this)
         val userRepository = UserRepository(database.userDao())
-        val historyRepository = com.aquadaily.app.core.repository.HistoryRepository(database.historyDao())
-        val factory = SettingsViewModelFactory(userRepository, historyRepository)
+        val historyRepository = HistoryRepository(database.historyDao())
+        val reminderRepository = ReminderRepository(database.reminderDao())
+        val factory = SettingsViewModelFactory(
+            userRepository,
+            historyRepository,
+            reminderRepository,
+            userId
+        )
         viewModel = ViewModelProvider(this, factory)[SettingsViewModel::class.java]
 
         setupObservers()
@@ -51,31 +62,20 @@ class SettingsActivity : AppCompatActivity() {
 
     private fun setupAnimations() {
         DashboardAnimation.animateCard(binding.cardProfile, 0L)
-        // Note: Section labels and cards can also be animated if they have IDs
     }
 
     private fun setupObservers() {
         viewModel.user.observe(this, Observer { user: UserEntity? ->
             if (user != null) {
                 displayUser(user)
-                // Re-calculate streak when user target might have changed
-                viewModel.dailyWater.observe(this, Observer { history ->
-                    if (history != null) {
-                        viewModel.calculateStreak(history, preferences.getWaterTarget())
-                    }
-                })
             } else {
-                // Initial data from preferences if no user exists in Room
-                viewModel.insertUser(
-                    UserEntity(
-                        name = preferences.getUserName(),
-                        email = preferences.getEmail(),
-                        gender = "Male",
-                        age = 20,
-                        weight = 60.0,
-                        streak = 0
-                    )
-                )
+                logout()
+            }
+        })
+
+        viewModel.dailyWater.observe(this, Observer { history ->
+            if (history != null) {
+                viewModel.calculateStreak(history, preferences.getWaterTarget())
             }
         })
 
@@ -104,78 +104,62 @@ class SettingsActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
-        updateSummaries()
+        if (::preferences.isInitialized && preferences.isLoggedIn()) {
+            updateSummaries()
+        }
     }
 
     private fun updateSummaries() {
-        if (::preferences.isInitialized) {
-            binding.tvTargetStatus.text = "Target: ${preferences.getWaterTarget()} ml"
-            
-            val notifStatus = if (preferences.isNotificationsEnabled()) "Enabled" else "Disabled"
-            binding.tvNotifStatus.text = "$notifStatus · All days"
-        }
+        binding.tvTargetStatus.text = "Target: ${preferences.getWaterTarget()} ml"
+
+        val notifStatus = if (preferences.isNotificationsEnabled()) "Enabled" else "Disabled"
+        binding.tvNotifStatus.text = "$notifStatus · All days"
 
         val database = AppDatabase.getInstance(this)
-        val reminderDao = database.reminderDao()
-        
-        // Quick way to get count for summary
-        reminderDao.getAllReminders().asLiveData().observe(this, Observer { reminders ->
-            val activeCount = reminders?.count { it.isEnabled } ?: 0
-            binding.tvActiveReminders.text = "$activeCount active reminders"
-        })
+        database.reminderDao()
+            .getAllReminders(preferences.getCurrentUserId())
+            .asLiveData()
+            .observe(this, Observer { reminders ->
+                val activeCount = reminders?.count { it.isEnabled } ?: 0
+                binding.tvActiveReminders.text = "$activeCount active reminders"
+            })
     }
 
     private fun setupListeners() {
-        binding.btnEdit.setOnClickListener {
-            openEditProfile()
-        }
+        binding.btnEdit.setOnClickListener { openEditProfile() }
 
         binding.menuWater.setOnClickListener {
-            val intent = Intent(this, WaterPreferencesActivity::class.java)
-            startActivity(intent)
+            startActivity(Intent(this, WaterPreferencesActivity::class.java))
         }
 
         binding.menuNotification.setOnClickListener {
-            val intent = Intent(this, NotificationSettingsActivity::class.java)
-            startActivity(intent)
+            startActivity(Intent(this, NotificationSettingsActivity::class.java))
         }
 
         binding.menuSchedule.setOnClickListener {
-            val intent = Intent(this, com.aquadaily.app.ui.reminder.ReminderActivity::class.java)
-            startActivity(intent)
+            startActivity(Intent(this, com.aquadaily.app.ui.reminder.ReminderActivity::class.java))
         }
 
         binding.menuHistory.setOnClickListener {
-            val intent = Intent(this, com.aquadaily.app.ui.history.HistoryActivity::class.java)
-            startActivity(intent)
+            startActivity(Intent(this, com.aquadaily.app.ui.history.HistoryActivity::class.java))
         }
 
-        binding.menuFeedback.setOnClickListener {
-            showFeedbackDialog()
-        }
+        binding.menuFeedback.setOnClickListener { showFeedbackDialog() }
 
         binding.menuRate.setOnClickListener {
             Toast.makeText(this, "Thank you for rating!", Toast.LENGTH_SHORT).show()
         }
 
-        binding.menuReset.setOnClickListener {
-            showResetDataDialog()
-        }
-
-        binding.btnLogout.setOnClickListener {
-            showLogoutDialog()
-        }
-
+        binding.menuReset.setOnClickListener { showResetDataDialog() }
+        binding.btnLogout.setOnClickListener { showLogoutDialog() }
         setupBottomNavigation()
     }
 
     private fun setupBottomNavigation() {
         binding.bottomNavigation.selectedItemId = com.aquadaily.app.R.id.nav_settings
-        
+
         val settingsItem = binding.bottomNavigation.findViewById<android.view.View>(com.aquadaily.app.R.id.nav_settings)
-        settingsItem.post {
-            BottomNavAnimation.animateNavigationItem(settingsItem)
-        }
+        settingsItem.post { BottomNavAnimation.animateNavigationItem(settingsItem) }
 
         binding.bottomNavigation.setOnItemSelectedListener { item ->
             if (item.itemId == binding.bottomNavigation.selectedItemId) return@setOnItemSelectedListener false
@@ -209,8 +193,7 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     private fun openEditProfile() {
-        val intent = Intent(this, com.aquadaily.app.ui.profile.EditProfileActivity::class.java)
-        startActivity(intent)
+        startActivity(Intent(this, com.aquadaily.app.ui.profile.EditProfileActivity::class.java))
     }
 
     private fun showFeedbackDialog() {
@@ -267,9 +250,7 @@ class SettingsActivity : AppCompatActivity() {
             .setTitle(getString(com.aquadaily.app.R.string.log_out))
             .setMessage(getString(com.aquadaily.app.R.string.logout_confirm))
             .setNegativeButton(getString(com.aquadaily.app.R.string.cancel), null)
-            .setPositiveButton(getString(com.aquadaily.app.R.string.log_out)) { _, _ ->
-                logout()
-            }
+            .setPositiveButton(getString(com.aquadaily.app.R.string.log_out)) { _, _ -> logout() }
             .show()
     }
 
@@ -280,7 +261,6 @@ class SettingsActivity : AppCompatActivity() {
             .setNegativeButton(getString(com.aquadaily.app.R.string.cancel), null)
             .setPositiveButton(getString(com.aquadaily.app.R.string.clear_all_data)) { _, _ ->
                 viewModel.clearAllData()
-                preferences.clearLogin()
                 Toast.makeText(this, getString(com.aquadaily.app.R.string.reset_data_success), Toast.LENGTH_SHORT).show()
                 logout()
             }
@@ -288,7 +268,9 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     private fun logout() {
-        preferences.clearLogin()
+        if (::preferences.isInitialized) {
+            preferences.clearSession()
+        }
         val intent = Intent(this, LoginActivity::class.java)
         intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
         startActivity(intent)
