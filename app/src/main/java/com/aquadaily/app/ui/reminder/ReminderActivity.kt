@@ -9,27 +9,39 @@ import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.aquadaily.app.App
-import com.aquadaily.app.animation.DashboardAnimation
 import com.aquadaily.app.animation.BottomNavAnimation
+import com.aquadaily.app.animation.DashboardAnimation
+import com.aquadaily.app.core.preferences.PreferencesManager
 import com.aquadaily.app.databinding.ActivityReminderBinding
 import com.google.android.material.transition.platform.MaterialContainerTransformSharedElementCallback
-import com.google.android.material.transition.platform.MaterialFadeThrough
 
 class ReminderActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityReminderBinding
+    private lateinit var preferences: PreferencesManager
+
     private val viewModel: ReminderViewModel by viewModels {
         val app = application as App
-        ReminderViewModel.Factory(app.reminderRepository, app.alarmScheduler)
+        ReminderViewModel.Factory(
+            app.reminderRepository,
+            app.alarmScheduler,
+            PreferencesManager(applicationContext).getCurrentUserId()
+        )
     }
+
     private lateinit var adapter: ReminderAdapter
 
     override fun onCreate(savedInstanceState: Bundle?) {
         window.requestFeature(Window.FEATURE_ACTIVITY_TRANSITIONS)
         setExitSharedElementCallback(MaterialContainerTransformSharedElementCallback())
         window.sharedElementsUseOverlay = false
-        
         super.onCreate(savedInstanceState)
+
+        preferences = PreferencesManager(this)
+        if (!preferences.isLoggedIn()) {
+            finish()
+            return
+        }
 
         binding = ActivityReminderBinding.inflate(layoutInflater)
         setContentView(binding.root)
@@ -50,19 +62,15 @@ class ReminderActivity : AppCompatActivity() {
 
     private fun initRecyclerView() {
         adapter = ReminderAdapter(
-            onToggle = { reminder, isEnabled ->
-                viewModel.updateReminderStatus(reminder, isEnabled)
-            },
+            onToggle = { reminder, isEnabled -> viewModel.updateReminderStatus(reminder, isEnabled) },
             onEdit = { reminder ->
-                val intent = Intent(this, AddReminderActivity::class.java).apply {
+                startActivity(Intent(this, AddReminderActivity::class.java).apply {
                     putExtra("REMINDER_ID", reminder.id)
-                }
-                startActivity(intent)
+                })
             },
-            onDelete = { reminder ->
-                viewModel.deleteReminder(reminder)
-            }
+            onDelete = { reminder -> viewModel.deleteReminder(reminder) }
         )
+
         binding.recyclerReminder.layoutManager = LinearLayoutManager(this)
         binding.recyclerReminder.adapter = adapter
     }
@@ -76,10 +84,8 @@ class ReminderActivity : AppCompatActivity() {
             } else {
                 binding.recyclerReminder.visibility = View.VISIBLE
                 adapter.submitList(reminders)
-                
                 binding.tvReminderCount.text = "${reminders.size} Reminders"
-                val activeCount = reminders.count { it.isEnabled }
-                binding.tvActiveCount.text = "$activeCount Active"
+                binding.tvActiveCount.text = "${reminders.count { it.isEnabled }} Active"
             }
         }
     }
@@ -98,11 +104,9 @@ class ReminderActivity : AppCompatActivity() {
 
     private fun setupBottomNavigation() {
         binding.bottomNavigation.selectedItemId = com.aquadaily.app.R.id.nav_schedule
-        
+
         val scheduleItem = binding.bottomNavigation.findViewById<View>(com.aquadaily.app.R.id.nav_schedule)
-        scheduleItem.post {
-            BottomNavAnimation.animateNavigationItem(scheduleItem)
-        }
+        scheduleItem.post { BottomNavAnimation.animateNavigationItem(scheduleItem) }
 
         binding.bottomNavigation.setOnItemSelectedListener { item ->
             if (item.itemId == binding.bottomNavigation.selectedItemId) return@setOnItemSelectedListener false
