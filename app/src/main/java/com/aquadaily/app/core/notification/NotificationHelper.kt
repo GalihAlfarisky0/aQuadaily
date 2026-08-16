@@ -35,6 +35,61 @@ class NotificationHelper(private val context: Context) {
         )
     }
 
+    /**
+     * Initializes the notification channels used by AquaDaily.
+     * Kept as a public API because App.kt calls this once during startup.
+     */
+    fun createNotificationChannels() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
+            return
+        }
+
+        val preferences = PreferencesManager(context)
+        val manager =
+            context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+
+        // Create the currently selected channel so the app is ready before
+        // the first reminder fires. Bundled sounds are resolved through R.raw.
+        val selectedSoundUri = getSelectedSoundUri(preferences)
+        val selectedChannelId = getChannelId(preferences, selectedSoundUri)
+        createNotificationChannel(selectedChannelId, preferences, selectedSoundUri)
+
+        // Also register each bundled sound as its own channel. Android 8+
+        // requires a channel's sound to be fixed at creation time, so separate
+        // channels let AquaDaily switch sounds reliably later.
+        NotificationSoundCatalog.getBundledSounds().forEach { sound ->
+            val uri = NotificationSoundCatalog.toUri(context, sound)
+            val channelId = "${CHANNEL_PREFIX}_bundled_${sound.id}"
+            val channelPreferencesName = sound.name
+
+            val attributes = AudioAttributes.Builder()
+                .setUsage(AudioAttributes.USAGE_NOTIFICATION)
+                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                .build()
+
+            if (manager.getNotificationChannel(channelId) == null) {
+                val channel = NotificationChannel(
+                    channelId,
+                    "$CHANNEL_NAME • $channelPreferencesName",
+                    NotificationManager.IMPORTANCE_HIGH
+                ).apply {
+                    description = "AquaDaily reminder"
+                    enableVibration(preferences.isNotificationVibrateEnabled())
+                    if (preferences.isNotificationVibrateEnabled()) {
+                        vibrationPattern = VIBRATION_PATTERN
+                    }
+                    if (preferences.isNotificationSoundEnabled()) {
+                        setSound(uri, attributes)
+                    } else {
+                        setSound(null, null)
+                    }
+                    lockscreenVisibility = NotificationCompat.VISIBILITY_PUBLIC
+                }
+                manager.createNotificationChannel(channel)
+            }
+        }
+    }
+
     fun showNotification(
         title: String,
         message: String,
