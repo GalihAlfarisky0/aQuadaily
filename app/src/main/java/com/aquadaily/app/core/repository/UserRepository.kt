@@ -5,11 +5,22 @@ import com.aquadaily.app.core.database.entity.UserEntity
 import kotlinx.coroutines.flow.Flow
 
 class UserRepository(private val userDao: UserDao) {
-    fun getUser(): Flow<UserEntity?> = userDao.getUser()
 
-    suspend fun insertUser(user: UserEntity) = userDao.insertUser(user)
+    fun getUserById(userId: Int): Flow<UserEntity?> =
+        userDao.getUserById(userId)
 
-    suspend fun updateUser(user: UserEntity) = userDao.updateUser(user)
+    suspend fun getUserByEmail(email: String): UserEntity? =
+        userDao.getUserByEmail(email)
 
-    suspend fun deleteUser() = userDao.deleteUser()
+    suspend fun insertUser(user: UserEntity): Long =
+        userDao.insertUser(user)
+
+    suspend fun updateUser(user: UserEntity) =
+        userDao.updateUser(user)
+
+    suspend fun deleteUserById(userId: Int) =
+        userDao.deleteUserById(userId)
+
+    suspend fun deleteUser() =
+        userDao.deleteUser()
 }
