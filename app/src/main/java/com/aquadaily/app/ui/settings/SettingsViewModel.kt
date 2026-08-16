@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import com.aquadaily.app.core.database.entity.UserEntity
 import com.aquadaily.app.core.database.model.DailyWater
 import com.aquadaily.app.core.repository.HistoryRepository
+import com.aquadaily.app.core.repository.ReminderRepository
 import com.aquadaily.app.core.repository.UserRepository
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
@@ -14,10 +15,13 @@ import java.util.*
 
 class SettingsViewModel(
     private val userRepository: UserRepository,
-    private val historyRepository: HistoryRepository
+    private val historyRepository: HistoryRepository,
+    private val reminderRepository: ReminderRepository,
+    private val userId: Int
 ) : ViewModel() {
-    val user = userRepository.getUser().asLiveData()
-    val dailyWater = historyRepository.getDailyWater()
+
+    val user = userRepository.getUserById(userId).asLiveData()
+    val dailyWater = historyRepository.getDailyWater(userId)
 
     private val _streak = MutableLiveData<Int>()
     val streak: androidx.lifecycle.LiveData<Int> = _streak
@@ -29,33 +33,19 @@ class SettingsViewModel(
         }
 
         val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
-        val calendar = Calendar.getInstance()
-        
-        // Today
-        val todayStr = sdf.format(calendar.time)
-        
-        // Yesterday
-        calendar.add(Calendar.DAY_OF_YEAR, -1)
-        val yesterdayStr = sdf.format(calendar.time)
-
         val waterMap = dailyWaterList.associateBy { it.date }
-        
         var currentStreak = 0
-        var checkDate = Calendar.getInstance()
-        
-        // Start checking from today
-        var dateStr = sdf.format(checkDate.time)
-        
-        // If today hasn't reached target, streak might still be active from yesterday
-        val todayWater = waterMap[dateStr]?.totalAmount ?: 0
+        val checkDate = Calendar.getInstance()
+
+        val todayStr = sdf.format(checkDate.time)
+        val todayWater = waterMap[todayStr]?.totalAmount ?: 0
         if (todayWater < target) {
-            // Check from yesterday backwards
             checkDate.add(Calendar.DAY_OF_YEAR, -1)
         }
 
         while (true) {
-            val dStr = sdf.format(checkDate.time)
-            val amount = waterMap[dStr]?.totalAmount ?: 0
+            val dateStr = sdf.format(checkDate.time)
+            val amount = waterMap[dateStr]?.totalAmount ?: 0
             if (amount >= target) {
                 currentStreak++
                 checkDate.add(Calendar.DAY_OF_YEAR, -1)
@@ -63,13 +53,13 @@ class SettingsViewModel(
                 break
             }
         }
-        
+
         _streak.value = currentStreak
     }
 
     fun updateUser(user: UserEntity) {
         viewModelScope.launch {
-            userRepository.updateUser(user)
+            userRepository.updateUser(user.copy(id = userId))
         }
     }
 
@@ -81,8 +71,9 @@ class SettingsViewModel(
 
     fun clearAllData() {
         viewModelScope.launch {
-            historyRepository.clearHistory()
-            userRepository.deleteUser()
+            historyRepository.clearHistory(userId)
+            reminderRepository.clearReminders(userId)
+            userRepository.deleteUserById(userId)
         }
     }
 }
