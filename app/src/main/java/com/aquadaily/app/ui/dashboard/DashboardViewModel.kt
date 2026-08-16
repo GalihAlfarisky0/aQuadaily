@@ -13,27 +13,33 @@ import java.util.*
 
 class DashboardViewModel(
     private val historyRepository: HistoryRepository,
-    private val reminderRepository: ReminderRepository
+    private val reminderRepository: ReminderRepository,
+    private val userId: Int
 ) : ViewModel() {
 
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
     private val timeFormat = SimpleDateFormat("HH:mm", Locale.getDefault())
 
-    val todayWaterIntake: LiveData<Int?> = historyRepository.getTotalWaterByDate(getCurrentDate())
-    val todayHistory: LiveData<List<HistoryEntity>> = historyRepository.getHistoryByDate(getCurrentDate())
-    val reminders = reminderRepository.getAllReminders().asLiveData()
+    val todayWaterIntake: LiveData<Int?> =
+        historyRepository.getTotalWaterByDate(userId, getCurrentDate())
 
-    private fun getCurrentDate(): String {
-        return dateFormat.format(Date())
-    }
+    val todayHistory: LiveData<List<HistoryEntity>> =
+        historyRepository.getHistoryByDate(userId, getCurrentDate())
 
-    private fun getCurrentTime(): String {
-        return timeFormat.format(Date())
-    }
+    val reminders = reminderRepository
+        .getAllReminders(userId)
+        .asLiveData()
+
+    private fun getCurrentDate(): String = dateFormat.format(Date())
+
+    private fun getCurrentTime(): String = timeFormat.format(Date())
 
     fun addWater(amount: Int) {
+        if (userId <= 0) return
+
         viewModelScope.launch {
             val history = HistoryEntity(
+                userId = userId,
                 amount = amount,
                 date = getCurrentDate(),
                 time = getCurrentTime(),
