@@ -11,5 +11,7 @@ data class ReminderEntity(
     val minute: Int,
     val day: String,
     val amount: Int,
-    val isEnabled: Boolean = true
+    val isEnabled: Boolean = true,
+    /** Selected ringtone key: default, aquadaily, brand_new_day. */
+    val ringtone: String = "default"
 )
