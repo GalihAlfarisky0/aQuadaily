@@ -70,25 +70,11 @@ class LoginActivity : AppCompatActivity() {
     private fun initView() {
         supportActionBar?.hide()
 
-        binding.btnSignIn.setOnClickListener {
-            performLogin()
-        }
-
-        binding.btnGoogle.setOnClickListener {
-            signInWithGoogle()
-        }
-
-        binding.btnCreateAccount.setOnClickListener {
-            navigateToRegister()
-        }
-
-        binding.btnTogglePassword.setOnClickListener {
-            togglePasswordVisibility()
-        }
-
-        binding.btnForgotPassword.setOnClickListener {
-            showForgotPasswordDialog()
-        }
+        binding.btnSignIn.setOnClickListener { performLogin() }
+        binding.btnGoogle.setOnClickListener { signInWithGoogle() }
+        binding.btnCreateAccount.setOnClickListener { navigateToRegister() }
+        binding.btnTogglePassword.setOnClickListener { togglePasswordVisibility() }
+        binding.btnForgotPassword.setOnClickListener { showForgotPasswordDialog() }
     }
 
     private fun performLogin() {
@@ -104,40 +90,35 @@ class LoginActivity : AppCompatActivity() {
             val user = userRepository.getUserByEmail(email)
 
             when {
-                user == null -> {
-                    Toast.makeText(
-                        this@LoginActivity,
-                        "Account not found. Create an account first.",
-                        Toast.LENGTH_LONG
-                    ).show()
-                }
-                user.passwordHash.isEmpty() -> {
-                    Toast.makeText(
-                        this@LoginActivity,
-                        "This account needs to be registered again.",
-                        Toast.LENGTH_LONG
-                    ).show()
-                }
-                user.passwordHash != PasswordHasher.hash(password) -> {
-                    Toast.makeText(
-                        this@LoginActivity,
-                        "Incorrect email or password",
-                        Toast.LENGTH_SHORT
-                    ).show()
-                }
-                else -> {
-                    loginSuccess(user.id, user.name, user.email)
-                }
+                user == null -> Toast.makeText(
+                    this@LoginActivity,
+                    "Account not found. Create an account first.",
+                    Toast.LENGTH_LONG
+                ).show()
+
+                user.passwordHash.isEmpty() -> Toast.makeText(
+                    this@LoginActivity,
+                    "This account needs to be registered again.",
+                    Toast.LENGTH_LONG
+                ).show()
+
+                user.passwordHash != PasswordHasher.hash(password) -> Toast.makeText(
+                    this@LoginActivity,
+                    "Incorrect email or password",
+                    Toast.LENGTH_SHORT
+                ).show()
+
+                else -> loginSuccess(user.id, user.name, user.email)
             }
         }
     }
 
     private fun showForgotPasswordDialog() {
-        val builder = android.app.AlertDialog.Builder(this)
-        builder.setTitle("Forgot Password")
-        builder.setMessage("Password reset is not available for local accounts yet.")
-        builder.setPositiveButton("OK", null)
-        builder.show()
+        android.app.AlertDialog.Builder(this)
+            .setTitle("Forgot Password")
+            .setMessage("Password reset is not available for local accounts yet.")
+            .setPositiveButton("OK", null)
+            .show()
     }
 
     private fun signInWithGoogle() {
@@ -150,8 +131,7 @@ class LoginActivity : AppCompatActivity() {
 
     private fun togglePasswordVisibility() {
         val currentlyVisible =
-            binding.etPassword.inputType == InputType.TYPE_CLASS_TEXT or
-                InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD
+            (binding.etPassword.inputType and InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD) != 0
 
         binding.etPassword.inputType = if (currentlyVisible) {
             InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
