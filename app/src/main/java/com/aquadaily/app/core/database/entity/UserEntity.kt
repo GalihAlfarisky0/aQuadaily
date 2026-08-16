@@ -9,7 +9,8 @@ data class UserEntity(
     val id: Int = 0,
     val name: String,
     val email: String,
-    val gender: String, // "Female" or "Male"
+    val passwordHash: String = "",
+    val gender: String,
     val age: Int,
     val weight: Double,
     val profileImage: String? = null,
