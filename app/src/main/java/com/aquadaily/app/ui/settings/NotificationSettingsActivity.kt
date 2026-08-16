@@ -1,11 +1,14 @@
 package com.aquadaily.app.ui.settings
 
-import android.content.Intent
+import android.media.MediaPlayer
 import android.media.Ringtone
 import android.media.RingtoneManager
+import android.net.Uri
 import android.os.Bundle
 import android.widget.Toast
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import com.aquadaily.app.core.notification.NotificationSoundCatalog
 import com.aquadaily.app.core.preferences.PreferencesManager
 import com.aquadaily.app.databinding.ActivityNotificationSettingsBinding
 
@@ -13,11 +16,9 @@ class NotificationSettingsActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityNotificationSettingsBinding
     private lateinit var preferences: PreferencesManager
-    private var previewRingtone: Ringtone? = null
 
-    companion object {
-        private const val REQUEST_NOTIFICATION_SOUND = 2001
-    }
+    private var previewRingtone: Ringtone? = null
+    private var previewPlayer: MediaPlayer? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -84,69 +85,94 @@ class NotificationSettingsActivity : AppCompatActivity() {
         binding.btnDefaultSound.isEnabled = enabled
     }
 
+    /**
+     * Shows sounds bundled inside AquaDaily's res/raw folder.
+     * The system ringtone picker cannot reliably expose app-local raw resources,
+     * so the app now owns this picker instead of delegating to the OS.
+     */
     private fun openSoundPicker() {
         stopPreview()
 
-        val intent = Intent(RingtoneManager.ACTION_RINGTONE_PICKER).apply {
-            putExtra(
-                RingtoneManager.EXTRA_RINGTONE_TYPE,
-                RingtoneManager.TYPE_NOTIFICATION
-            )
-            putExtra(
-                RingtoneManager.EXTRA_RINGTONE_TITLE,
-                "Pilih suara notifikasi"
-            )
-            putExtra(
-                RingtoneManager.EXTRA_RINGTONE_SHOW_SILENT,
-                false
-            )
-            putExtra(
-                RingtoneManager.EXTRA_RINGTONE_EXISTING_URI,
-                preferences.getNotificationSoundUri()?.let { android.net.Uri.parse(it) }
-                    ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
-            )
-        }
+        val sounds = listOf(
+            NotificationSoundCatalog.Sound(
+                id = NotificationSoundCatalog.DEFAULT_ID,
+                name = "Suara bawaan",
+                resourceId = 0,
+            ),
+        ) + NotificationSoundCatalog.getBundledSounds()
 
-        startActivityForResult(intent, REQUEST_NOTIFICATION_SOUND)
-    }
+        val currentId = preferences.getNotificationSoundUri()
+            ?.removePrefix("aquadaily://sound/")
+            ?: NotificationSoundCatalog.DEFAULT_ID
 
-    @Deprecated("Deprecated in Android API; kept for broad device compatibility")
-    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-        super.onActivityResult(requestCode, resultCode, data)
+        val names = sounds.map { it.name }.toTypedArray()
+        val checkedIndex = sounds.indexOfFirst { it.id == currentId }.coerceAtLeast(0)
 
-        if (requestCode != REQUEST_NOTIFICATION_SOUND || resultCode != RESULT_OK) {
-            return
-        }
+        AlertDialog.Builder(this)
+            .setTitle("Pilih suara notifikasi")
+            .setSingleChoiceItems(names, checkedIndex) { dialog, which ->
+                val selected = sounds[which]
 
-        val selectedUri = data?.getParcelableExtra<android.net.Uri>(RingtoneManager.EXTRA_RINGTONE_PICKED_URI)
+                if (selected.id == NotificationSoundCatalog.DEFAULT_ID) {
+                    preferences.setNotificationSoundUri(null)
+                } else {
+                    preferences.setNotificationSoundUri(
+                        "aquadaily://sound/${selected.id}"
+                    )
+                }
 
-        if (selectedUri == null) {
-            return
-        }
-
-        val ringtone = RingtoneManager.getRingtone(this, selectedUri)
-        val title = ringtone?.getTitle(this)?.takeIf { it.isNotBlank() } ?: "Suara pilihan"
-
-        preferences.setNotificationSoundUri(selectedUri.toString())
-        preferences.setNotificationSoundName(title)
-        binding.tvSelectedSound.text = title
-
-        Toast.makeText(this, "Suara disimpan", Toast.LENGTH_SHORT).show()
+                preferences.setNotificationSoundName(selected.name)
+                binding.tvSelectedSound.text = selected.name
+                dialog.dismiss()
+                Toast.makeText(
+                    this,
+                    "Suara ${selected.name} dipilih",
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
+            .setNegativeButton("Batal", null)
+            .show()
     }
 
     private fun previewSelectedSound() {
         stopPreview()
 
-        val uri = preferences.getNotificationSoundUri()?.let { android.net.Uri.parse(it) }
+        val selectedId = preferences.getNotificationSoundUri()
+            ?.removePrefix("aquadaily://sound/")
+
+        val bundledSound = NotificationSoundCatalog.findById(selectedId)
+        if (bundledSound != null) {
+            previewPlayer = MediaPlayer.create(this, bundledSound.resourceId)?.apply {
+                setOnCompletionListener { stopPreview() }
+                start()
+            }
+            return
+        }
+
+        val systemUri = preferences.getNotificationSoundUri()
+            ?.takeIf { it.isNotBlank() }
+            ?.let(Uri::parse)
             ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
 
-        previewRingtone = RingtoneManager.getRingtone(this, uri)
+        previewRingtone = RingtoneManager.getRingtone(this, systemUri)
         previewRingtone?.play()
     }
 
     private fun stopPreview() {
         previewRingtone?.stop()
         previewRingtone = null
+
+        previewPlayer?.let { player ->
+            try {
+                if (player.isPlaying) {
+                    player.stop()
+                }
+            } catch (_: IllegalStateException) {
+                // Player may already have completed or been released.
+            }
+            player.release()
+        }
+        previewPlayer = null
     }
 
     override fun onPause() {
