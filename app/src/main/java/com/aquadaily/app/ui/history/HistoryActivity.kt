@@ -7,8 +7,8 @@ import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.aquadaily.app.R
-import com.aquadaily.app.animation.DashboardAnimation
 import com.aquadaily.app.animation.BottomNavAnimation
+import com.aquadaily.app.animation.DashboardAnimation
 import com.aquadaily.app.core.database.AppDatabase
 import com.aquadaily.app.core.database.model.DailyWater
 import com.aquadaily.app.core.database.model.MonthlyWater
@@ -33,17 +33,24 @@ class HistoryActivity : AppCompatActivity() {
 
     private val viewModel: HistoryViewModel by viewModels {
         val database = AppDatabase.getInstance(applicationContext)
-        val repository = HistoryRepository(database.historyDao())
-        HistoryViewModelFactory(repository)
+        HistoryViewModelFactory(
+            HistoryRepository(database.historyDao()),
+            PreferencesManager(applicationContext).getCurrentUserId()
+        )
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        preferences = PreferencesManager(this)
+
+        if (!preferences.isLoggedIn()) {
+            finish()
+            return
+        }
+
         binding = ActivityHistoryBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        preferences = PreferencesManager(this)
-        
         setupRecyclerView()
         setupBottomNavigation()
         setupPeriodSwitcher()
@@ -70,15 +77,10 @@ class HistoryActivity : AppCompatActivity() {
 
     private fun refreshData() {
         viewModel.getDailyWater().value?.let { dailyData ->
-            if (binding.chipWeekly.isChecked) {
-                setupWeeklyChart(dailyData.takeLast(7))
-            }
+            if (binding.chipWeekly.isChecked) setupWeeklyChart(dailyData.takeLast(7))
         }
-        
         viewModel.getMonthlyWater().value?.let { monthlyData ->
-            if (binding.chipMonthly.isChecked) {
-                setupMonthlyChart(monthlyData)
-            }
+            if (binding.chipMonthly.isChecked) setupMonthlyChart(monthlyData)
         }
     }
 
@@ -93,21 +95,24 @@ class HistoryActivity : AppCompatActivity() {
 
     private fun observeData() {
         val dailyTarget = preferences.getWaterTarget()
-        
+
+        viewModel.allHistory.observe(this) { history ->
+            historyRecordAdapter.submitList(history)
+        }
+
         viewModel.getDailyWater().observe(this) { dailyData ->
-            if (dailyData != null && dailyData.isNotEmpty()) {
-                historyRecordAdapter.submitList(dailyData.reversed())
+            if (!dailyData.isNullOrEmpty()) {
                 updateStats(dailyData, dailyTarget)
                 viewModel.calculateStreak(dailyData, dailyTarget)
-                
-                if (binding.chipWeekly.isChecked) {
-                    setupWeeklyChart(dailyData.takeLast(7))
-                }
+                if (binding.chipWeekly.isChecked) setupWeeklyChart(dailyData.takeLast(7))
+            } else {
+                updateStats(emptyList(), dailyTarget)
+                viewModel.calculateStreak(emptyList(), dailyTarget)
             }
         }
 
         viewModel.getMonthlyWater().observe(this) { monthlyData ->
-            if (monthlyData != null && monthlyData.isNotEmpty() && binding.chipMonthly.isChecked) {
+            if (!monthlyData.isNullOrEmpty() && binding.chipMonthly.isChecked) {
                 setupMonthlyChart(monthlyData)
             }
         }
@@ -122,12 +127,12 @@ class HistoryActivity : AppCompatActivity() {
         val best = data.maxOfOrNull { it.totalAmount } ?: 0
         val worst = data.minOfOrNull { it.totalAmount } ?: 0
         val total = data.sumOf { it.totalAmount }
-        
+
         binding.tvAvgDaily.text = "$avg ml"
         binding.tvBestDay.text = "$best ml"
         binding.tvTotalIntake.text = "$total ml"
         binding.tvWorstDay.text = "$worst ml"
-        
+
         val todayStr = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
         val todayData = data.find { it.date == todayStr }?.totalAmount ?: 0
         val completion = if (target > 0) (todayData.toFloat() / target * 100).toInt() else 0
@@ -135,19 +140,16 @@ class HistoryActivity : AppCompatActivity() {
     }
 
     private fun setupWeeklyChart(data: List<DailyWater>) {
-        val entries = data.mapIndexed { index, dailyWater ->
-            Entry(index.toFloat(), dailyWater.totalAmount.toFloat())
+        val entries = data.mapIndexed { index, item ->
+            Entry(index.toFloat(), item.totalAmount.toFloat())
         }
-
-        val dataSet = LineDataSet(entries, "Water Intake")
-        dataSet.apply {
+        val dataSet = LineDataSet(entries, "Water Intake").apply {
             color = Color.parseColor("#2196F3")
             setCircleColor(Color.parseColor("#2196F3"))
             lineWidth = 3f
             circleRadius = 5f
             setDrawCircleHole(true)
             circleHoleRadius = 3f
-            valueTextSize = 10f
             setDrawFilled(true)
             fillColor = Color.parseColor("#2196F3")
             fillAlpha = 30
@@ -155,12 +157,10 @@ class HistoryActivity : AppCompatActivity() {
             setDrawValues(false)
         }
 
-        val lineData = LineData(dataSet)
         binding.mainChart.apply {
-            this.data = lineData
+            this.data = LineData(dataSet)
             description.isEnabled = false
             legend.isEnabled = false
-            
             xAxis.apply {
                 position = XAxis.XAxisPosition.BOTTOM
                 setDrawGridLines(false)
@@ -168,14 +168,12 @@ class HistoryActivity : AppCompatActivity() {
                 granularity = 1f
                 textColor = Color.parseColor("#9E9E9E")
             }
-            
             axisLeft.apply {
                 setDrawGridLines(true)
                 gridColor = Color.parseColor("#E0E0E0")
                 textColor = Color.parseColor("#9E9E9E")
                 axisMinimum = 0f
             }
-            
             axisRight.isEnabled = false
             setTouchEnabled(true)
             setPinchZoom(false)
@@ -185,19 +183,16 @@ class HistoryActivity : AppCompatActivity() {
     }
 
     private fun setupMonthlyChart(data: List<MonthlyWater>) {
-        val entries = data.mapIndexed { index, monthlyWater ->
-            Entry(index.toFloat(), monthlyWater.totalAmount.toFloat())
+        val entries = data.mapIndexed { index, item ->
+            Entry(index.toFloat(), item.totalAmount.toFloat())
         }
-
-        val dataSet = LineDataSet(entries, "Monthly Intake")
-        dataSet.apply {
+        val dataSet = LineDataSet(entries, "Monthly Intake").apply {
             color = Color.parseColor("#4CAF50")
             setCircleColor(Color.parseColor("#4CAF50"))
             lineWidth = 3f
             circleRadius = 5f
             setDrawCircleHole(true)
             circleHoleRadius = 3f
-            valueTextSize = 10f
             setDrawFilled(true)
             fillColor = Color.parseColor("#4CAF50")
             fillAlpha = 30
@@ -205,9 +200,10 @@ class HistoryActivity : AppCompatActivity() {
             setDrawValues(false)
         }
 
-        val lineData = LineData(dataSet)
         binding.mainChart.apply {
-            this.data = lineData
+            this.data = LineData(dataSet)
+            description.isEnabled = false
+            legend.isEnabled = false
             xAxis.valueFormatter = IndexAxisValueFormatter(data.map { formatMonth(it.month) })
             animateY(1000)
             invalidate()
@@ -218,9 +214,8 @@ class HistoryActivity : AppCompatActivity() {
         return try {
             val inputFormat = SimpleDateFormat("yyyy-MM", Locale.getDefault())
             val outputFormat = SimpleDateFormat("MMM", Locale.getDefault())
-            val date = inputFormat.parse(monthStr)
-            outputFormat.format(date ?: Date())
-        } catch (e: Exception) {
+            outputFormat.format(inputFormat.parse(monthStr)!!)
+        } catch (_: Exception) {
             monthStr
         }
     }
@@ -228,25 +223,20 @@ class HistoryActivity : AppCompatActivity() {
     private fun formatDateShort(dateStr: String): String {
         return try {
             val inputFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
-            val outputFormat = SimpleDateFormat("EEE", Locale.getDefault())
-            val date = inputFormat.parse(dateStr)
-            outputFormat.format(date ?: Date())
-        } catch (e: Exception) {
+            val outputFormat = SimpleDateFormat("dd/MM", Locale.getDefault())
+            outputFormat.format(inputFormat.parse(dateStr)!!)
+        } catch (_: Exception) {
             dateStr
         }
     }
 
     private fun setupBottomNavigation() {
         binding.bottomNavigation.selectedItemId = R.id.nav_history
-        
         val historyItem = binding.bottomNavigation.findViewById<android.view.View>(R.id.nav_history)
-        historyItem.post {
-            BottomNavAnimation.animateNavigationItem(historyItem)
-        }
+        historyItem.post { BottomNavAnimation.animateNavigationItem(historyItem) }
 
         binding.bottomNavigation.setOnItemSelectedListener { item ->
             if (item.itemId == binding.bottomNavigation.selectedItemId) return@setOnItemSelectedListener false
-
             val itemView = binding.bottomNavigation.findViewById<android.view.View>(item.itemId)
             BottomNavAnimation.animateClick(itemView)
 
@@ -266,7 +256,7 @@ class HistoryActivity : AppCompatActivity() {
                 R.id.nav_history -> true
                 R.id.nav_settings -> {
                     startActivity(Intent(this, SettingsActivity::class.java))
-                    overridePendingTransition(R.anim.slide_in_right, R.anim.slide_out_left)
+                    overridePendingTransition(R.anim.slide_in_left, R.anim.slide_out_right)
                     finish()
                     true
                 }
