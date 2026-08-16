@@ -16,13 +16,8 @@ import com.aquadaily.app.ui.dashboard.DashboardActivity
 /**
  * Centralized AquaDaily notification manager.
  *
- * Supports:
- * - High priority reminder notifications
- * - Vibration patterns
- * - User-selectable notification sounds
- * - Fallback to the system notification sound
- * - Per-sound channels so Android 8+ can apply the selected sound reliably
- * - Android 13+ notification permission awareness
+ * Sounds stored in res/raw are addressed with android.resource:// URIs so
+ * they work independently from the device's system ringtone library.
  */
 class NotificationHelper(private val context: Context) {
 
@@ -63,15 +58,11 @@ class NotificationHelper(private val context: Context) {
         val channelId = getChannelId(preferences, soundUri)
         createNotificationChannel(channelId, preferences, soundUri)
 
-        val intent = Intent(
-            context,
-            DashboardActivity::class.java
-        ).apply {
+        val intent = Intent(context, DashboardActivity::class.java).apply {
             flags =
                 Intent.FLAG_ACTIVITY_NEW_TASK or
                     Intent.FLAG_ACTIVITY_CLEAR_TOP or
                     Intent.FLAG_ACTIVITY_SINGLE_TOP
-
             putExtra("EXTRA_NOTIFICATION_ID", notificationId)
         }
 
@@ -79,20 +70,14 @@ class NotificationHelper(private val context: Context) {
             context,
             notificationId,
             intent,
-            PendingIntent.FLAG_UPDATE_CURRENT or
-                PendingIntent.FLAG_IMMUTABLE
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        val notification = NotificationCompat.Builder(
-            context,
-            channelId
-        )
+        val notification = NotificationCompat.Builder(context, channelId)
             .setSmallIcon(R.drawable.ic_water_drop)
             .setContentTitle(title)
             .setContentText(message)
-            .setStyle(
-                NotificationCompat.BigTextStyle().bigText(message)
-            )
+            .setStyle(NotificationCompat.BigTextStyle().bigText(message))
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setCategory(NotificationCompat.CATEGORY_REMINDER)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
@@ -104,17 +89,9 @@ class NotificationHelper(private val context: Context) {
         val notificationManager =
             context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
-        notificationManager.notify(
-            notificationId,
-            notification
-        )
+        notificationManager.notify(notificationId, notification)
     }
 
-    /**
-     * Creates the channel for the currently selected sound/settings.
-     * A different channel ID is used for a different sound because Android
-     * does not allow changing a notification channel's sound after creation.
-     */
     private fun createNotificationChannel(
         channelId: String,
         preferences: PreferencesManager,
@@ -127,9 +104,6 @@ class NotificationHelper(private val context: Context) {
         val manager =
             context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
-        val soundEnabled = preferences.isNotificationSoundEnabled()
-        val vibrationEnabled = preferences.isNotificationVibrateEnabled()
-
         val soundAttributes = AudioAttributes.Builder()
             .setUsage(AudioAttributes.USAGE_NOTIFICATION)
             .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
@@ -141,13 +115,13 @@ class NotificationHelper(private val context: Context) {
             NotificationManager.IMPORTANCE_HIGH
         ).apply {
             description = "AquaDaily reminder"
-            enableVibration(vibrationEnabled)
+            enableVibration(preferences.isNotificationVibrateEnabled())
 
-            if (vibrationEnabled) {
+            if (preferences.isNotificationVibrateEnabled()) {
                 vibrationPattern = VIBRATION_PATTERN
             }
 
-            if (soundEnabled) {
+            if (preferences.isNotificationSoundEnabled()) {
                 setSound(
                     soundUri ?: android.provider.Settings.System.DEFAULT_NOTIFICATION_URI,
                     soundAttributes
@@ -166,6 +140,12 @@ class NotificationHelper(private val context: Context) {
         val storedUri = preferences.getNotificationSoundUri()
         if (storedUri.isNullOrBlank()) {
             return android.provider.Settings.System.DEFAULT_NOTIFICATION_URI
+        }
+
+        val selectedId = storedUri.removePrefix("aquadaily://sound/")
+        val bundledSound = NotificationSoundCatalog.findById(selectedId)
+        if (bundledSound != null) {
+            return NotificationSoundCatalog.toUri(context, bundledSound)
         }
 
         return try {
