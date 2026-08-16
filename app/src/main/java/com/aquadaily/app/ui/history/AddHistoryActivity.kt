@@ -9,6 +9,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.aquadaily.app.core.database.AppDatabase
 import com.aquadaily.app.core.database.entity.HistoryEntity
+import com.aquadaily.app.core.notification.NotificationHelper
 import com.aquadaily.app.core.repository.HistoryRepository
 import com.aquadaily.app.databinding.ActivityAddHistoryBinding
 import kotlinx.coroutines.launch
@@ -19,7 +20,7 @@ import java.util.Locale
 class AddHistoryActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityAddHistoryBinding
-    
+
     private val viewModel: HistoryViewModel by viewModels {
         val database = AppDatabase.getInstance(applicationContext)
         val repository = HistoryRepository(database.historyDao())
@@ -36,12 +37,11 @@ class AddHistoryActivity : AppCompatActivity() {
         binding = ActivityAddHistoryBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        // Ambil ID jika dalam mode Edit
         historyId = intent.getIntExtra("EXTRA_HISTORY_ID", 0)
 
         setupDateTimePickers()
         setupListeners()
-        
+
         if (historyId != 0) {
             binding.tvAddTitle.text = "Edit History"
             binding.btnSaveHistory.text = "Update Record"
@@ -53,9 +53,10 @@ class AddHistoryActivity : AppCompatActivity() {
         lifecycleScope.launch {
             val history = viewModel.getHistoryById(historyId)
             history?.let {
-                // Convert yyyy-MM-dd to dd-MM-yyyy for display
                 val date = storageFormatter.parse(it.date)
-                binding.etDate.setText(if (date != null) displayFormatter.format(date) else it.date)
+                binding.etDate.setText(
+                    if (date != null) displayFormatter.format(date) else it.date
+                )
                 binding.etTime.setText(it.time)
                 binding.etAmount.setText(it.amount.toString())
                 binding.etNote.setText(it.note)
@@ -65,65 +66,141 @@ class AddHistoryActivity : AppCompatActivity() {
 
     private fun setupDateTimePickers() {
         val calendar = Calendar.getInstance()
-        
-        // Default values for new record
+
         if (historyId == 0) {
             binding.etDate.setText(displayFormatter.format(calendar.time))
-            binding.etTime.setText(String.format(Locale.getDefault(), "%02d:%02d", 
-                calendar.get(Calendar.HOUR_OF_DAY), calendar.get(Calendar.MINUTE)))
+            binding.etTime.setText(
+                String.format(
+                    Locale.getDefault(),
+                    "%02d:%02d",
+                    calendar.get(Calendar.HOUR_OF_DAY),
+                    calendar.get(Calendar.MINUTE)
+                )
+            )
         }
 
         binding.etDate.setOnClickListener {
             val dateStr = binding.etDate.text.toString()
-            val date = try { displayFormatter.parse(dateStr) } catch (e: Exception) { null }
+            val date = try {
+                displayFormatter.parse(dateStr)
+            } catch (_: Exception) {
+                null
+            }
+
             date?.let { calendar.time = it }
 
-            DatePickerDialog(this, { _, y, m, d ->
-                calendar.set(y, m, d)
-                binding.etDate.setText(displayFormatter.format(calendar.time))
-            }, calendar.get(Calendar.YEAR), calendar.get(Calendar.MONTH), calendar.get(Calendar.DAY_OF_MONTH)).show()
+            DatePickerDialog(
+                this,
+                { _, y, m, d ->
+                    calendar.set(y, m, d)
+                    binding.etDate.setText(displayFormatter.format(calendar.time))
+                },
+                calendar.get(Calendar.YEAR),
+                calendar.get(Calendar.MONTH),
+                calendar.get(Calendar.DAY_OF_MONTH)
+            ).show()
         }
 
         binding.etTime.setOnClickListener {
             val timeParts = binding.etTime.text.toString().split(":")
-            val hour = if (timeParts.size == 2) timeParts[0].toInt() else calendar.get(Calendar.HOUR_OF_DAY)
-            val minute = if (timeParts.size == 2) timeParts[1].toInt() else calendar.get(Calendar.MINUTE)
+            val hour = if (timeParts.size == 2) {
+                timeParts[0].toIntOrNull() ?: calendar.get(Calendar.HOUR_OF_DAY)
+            } else {
+                calendar.get(Calendar.HOUR_OF_DAY)
+            }
+            val minute = if (timeParts.size == 2) {
+                timeParts[1].toIntOrNull() ?: calendar.get(Calendar.MINUTE)
+            } else {
+                calendar.get(Calendar.MINUTE)
+            }
 
-            TimePickerDialog(this, { _, h, m ->
-                binding.etTime.setText(String.format(Locale.getDefault(), "%02d:%02d", h, m))
-            }, hour, minute, true).show()
+            TimePickerDialog(
+                this,
+                { _, h, m ->
+                    binding.etTime.setText(
+                        String.format(
+                            Locale.getDefault(),
+                            "%02d:%02d",
+                            h,
+                            m
+                        )
+                    )
+                },
+                hour,
+                minute,
+                true
+            ).show()
         }
     }
 
     private fun setupListeners() {
         binding.btnSaveHistory.setOnClickListener {
-            val amount = binding.etAmount.text.toString()
-            if (amount.isEmpty()) {
-                Toast.makeText(this, "Masukkan jumlah air", Toast.LENGTH_SHORT).show()
-                return@setOnClickListener
-            }
-
-            // Convert display date back to storage format
-            val displayDate = binding.etDate.text.toString()
-            val date = try { displayFormatter.parse(displayDate) } catch (e: Exception) { null }
-            val storageDate = if (date != null) storageFormatter.format(date) else displayDate
-
-            val history = HistoryEntity(
-                id = historyId,
-                date = storageDate,
-                time = binding.etTime.text.toString(),
-                amount = amount.toInt(),
-                note = binding.etNote.text.toString()
-            )
-
-            if (historyId == 0) {
-                viewModel.insert(history)
-                Toast.makeText(this, "Data ditambahkan!", Toast.LENGTH_SHORT).show()
-            } else {
-                viewModel.update(history)
-                Toast.makeText(this, "Data diperbarui!", Toast.LENGTH_SHORT).show()
-            }
-            finish()
+            saveHistory()
         }
+    }
+
+    private fun saveHistory() {
+        val amountText = binding.etAmount.text.toString().trim()
+
+        if (amountText.isEmpty()) {
+            Toast.makeText(
+                this,
+                "Masukkan jumlah air",
+                Toast.LENGTH_SHORT
+            ).show()
+            return
+        }
+
+        val amount = amountText.toIntOrNull()
+
+        if (amount == null || amount <= 0) {
+            Toast.makeText(
+                this,
+                "Jumlah air harus lebih dari 0 ml",
+                Toast.LENGTH_SHORT
+            ).show()
+            return
+        }
+
+        val displayDate = binding.etDate.text.toString()
+        val date = try {
+            displayFormatter.parse(displayDate)
+        } catch (_: Exception) {
+            null
+        }
+
+        val storageDate = if (date != null) {
+            storageFormatter.format(date)
+        } else {
+            displayDate
+        }
+
+        val history = HistoryEntity(
+            id = historyId,
+            date = storageDate,
+            time = binding.etTime.text.toString(),
+            amount = amount,
+            note = binding.etNote.text.toString()
+        )
+
+        if (historyId == 0) {
+            viewModel.insert(history)
+            Toast.makeText(
+                this,
+                "Data ditambahkan!",
+                Toast.LENGTH_SHORT
+            ).show()
+        } else {
+            viewModel.update(history)
+            Toast.makeText(
+                this,
+                "Data diperbarui!",
+                Toast.LENGTH_SHORT
+            ).show()
+        }
+
+        // Any explicit water intake update releases persistent reminders.
+        NotificationHelper.cancelActiveReminderNotifications(this)
+        finish()
     }
 }
