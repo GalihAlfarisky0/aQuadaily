@@ -22,6 +22,17 @@ class PreferencesManager(context: Context) {
     fun getEmail(): String =
         preferences.getString(KEY_EMAIL, "") ?: ""
 
+    fun setUserId(userId: Int) {
+        preferences.edit().putInt(KEY_CURRENT_USER_ID, userId).apply()
+    }
+
+    fun getCurrentUserId(): Int =
+        preferences.getInt(KEY_CURRENT_USER_ID, -1)
+
+    fun setCurrentUserId(userId: Int) {
+        setUserId(userId)
+    }
+
     fun setWaterTarget(target: Int) {
         preferences.edit().putInt(KEY_WATER_TARGET, target).apply()
     }
@@ -106,7 +117,10 @@ class PreferencesManager(context: Context) {
         preferences.getBoolean(KEY_LOGGED_IN, false)
 
     fun clearLogin() {
-        preferences.edit().putBoolean(KEY_LOGGED_IN, false).apply()
+        preferences.edit()
+            .remove(KEY_CURRENT_USER_ID)
+            .putBoolean(KEY_LOGGED_IN, false)
+            .apply()
     }
 
     companion object {
@@ -117,6 +131,7 @@ class PreferencesManager(context: Context) {
         private const val PREF_NAME = "aquadaily_preferences"
         private const val KEY_USER_NAME = "user_name"
         private const val KEY_EMAIL = "email"
+        private const val KEY_CURRENT_USER_ID = "current_user_id"
         private const val KEY_WATER_TARGET = "water_target"
         private const val KEY_INTERVAL = "reminder_interval"
         private const val KEY_START_TIME = "start_time"
