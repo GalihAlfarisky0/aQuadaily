@@ -9,6 +9,7 @@ import android.content.pm.PackageManager
 import android.media.AudioAttributes
 import android.net.Uri
 import android.os.Build
+import androidx.annotation.RequiresApi
 import androidx.core.app.NotificationCompat
 import com.aquadaily.app.R
 import com.aquadaily.app.core.preferences.PreferencesManager
@@ -17,16 +18,15 @@ import com.aquadaily.app.ui.dashboard.DashboardActivity
 /**
  * AquaDaily reminder notification manager.
  *
- * Behaviour:
- * - Notification stays visible until water intake is recorded.
+ * - Persistent reminder notification.
  * - User can choose Default System, AquaDaily Reminder, or Brand New Day.
  * - Sound and vibration can be toggled independently.
- * - Android 8+ uses dedicated channels for the selected sound/mode.
+ * - Android 8+ uses dedicated channels for each sound/mode combination.
  */
 class NotificationHelper(private val context: Context) {
 
     companion object {
-        private const val CHANNEL_PREFIX = "aquadaily_reminder_v3"
+        private const val CHANNEL_PREFIX = "aquadaily_reminder_v5"
 
         private val VIBRATION_PATTERN = longArrayOf(
             0L,
@@ -39,9 +39,9 @@ class NotificationHelper(private val context: Context) {
 
         fun cancelActiveReminderNotifications(context: Context) {
             val preferences = PreferencesManager(context)
-            val manager =
-                context.getSystemService(Context.NOTIFICATION_SERVICE)
-                    as NotificationManager
+            val manager = context.getSystemService(
+                Context.NOTIFICATION_SERVICE
+            ) as NotificationManager
 
             preferences.getActiveReminderNotificationIds().forEach { id ->
                 manager.cancel(id)
@@ -71,7 +71,11 @@ class NotificationHelper(private val context: Context) {
 
         createNotificationChannels()
 
-        val channelId = resolveChannelId(preferences)
+        val channelId = buildChannelId(
+            ringtoneKey = preferences.getNotificationRingtone(),
+            soundEnabled = preferences.isNotificationSoundEnabled(),
+            vibrationEnabled = preferences.isNotificationVibrateEnabled()
+        )
 
         val intent = Intent(
             context,
@@ -101,8 +105,7 @@ class NotificationHelper(private val context: Context) {
             .setContentTitle(title)
             .setContentText(message)
             .setStyle(
-                NotificationCompat.BigTextStyle()
-                    .bigText(message)
+                NotificationCompat.BigTextStyle().bigText(message)
             )
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setCategory(NotificationCompat.CATEGORY_REMINDER)
@@ -113,9 +116,9 @@ class NotificationHelper(private val context: Context) {
             .setContentIntent(pendingIntent)
             .build()
 
-        val manager =
-            context.getSystemService(Context.NOTIFICATION_SERVICE)
-                as NotificationManager
+        val manager = context.getSystemService(
+            Context.NOTIFICATION_SERVICE
+        ) as NotificationManager
 
         manager.notify(notificationId, notification)
         preferences.addActiveReminderNotificationId(notificationId)
@@ -124,9 +127,9 @@ class NotificationHelper(private val context: Context) {
     fun createNotificationChannels() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
 
-        val manager =
-            context.getSystemService(Context.NOTIFICATION_SERVICE)
-                as NotificationManager
+        val manager = context.getSystemService(
+            Context.NOTIFICATION_SERVICE
+        ) as NotificationManager
 
         val soundAttributes = AudioAttributes.Builder()
             .setUsage(AudioAttributes.USAGE_NOTIFICATION)
@@ -134,128 +137,133 @@ class NotificationHelper(private val context: Context) {
             .build()
 
         val ringtoneConfigs = listOf(
-            RingtoneConfig(
-                key = PreferencesManager.RINGTONE_DEFAULT,
-                label = "Default System",
-                sound = android.provider.Settings.System.DEFAULT_NOTIFICATION_URI
+            Triple(
+                PreferencesManager.RINGTONE_DEFAULT,
+                "Default System",
+                android.provider.Settings.System.DEFAULT_NOTIFICATION_URI
             ),
-            RingtoneConfig(
-                key = PreferencesManager.RINGTONE_AQUADAILY,
-                label = "AquaDaily Reminder",
-                sound = resolveRawSound("aquadaily_reminder")
+            Triple(
+                PreferencesManager.RINGTONE_AQUADAILY,
+                "AquaDaily Reminder",
+                resolveRawSound("aquadaily_reminder")
                     ?: android.provider.Settings.System.DEFAULT_NOTIFICATION_URI
             ),
-            RingtoneConfig(
-                key = PreferencesManager.RINGTONE_BRAND_NEW_DAY,
-                label = "Brand New Day",
-                sound = resolveRawSound("brand_new_day")
+            Triple(
+                PreferencesManager.RINGTONE_BRAND_NEW_DAY,
+                "Brand New Day",
+                resolveRawSound("brand_new_day")
                     ?: android.provider.Settings.System.DEFAULT_NOTIFICATION_URI
             )
         )
 
-        ringtoneConfigs.forEach { ringtone ->
-            createChannel(
-                manager = manager,
-                ringtone = ringtone,
-                modeKey = "sound_vibrate",
-                modeLabel = "Sound + Vibration",
-                soundEnabled = true,
-                vibrationEnabled = true,
-                soundAttributes = soundAttributes
-            )
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            ringtoneConfigs.forEach { (ringtoneKey, ringtoneLabel, soundUri) ->
+                createChannel(
+                    manager = manager,
+                    ringtoneKey = ringtoneKey,
+                    ringtoneLabel = ringtoneLabel,
+                    modeKey = "sound_vibrate",
+                    modeLabel = "Sound + Vibration",
+                    soundEnabled = true,
+                    vibrationEnabled = true,
+                    soundUri = soundUri,
+                    soundAttributes = soundAttributes
+                )
 
-            createChannel(
-                manager = manager,
-                ringtone = ringtone,
-                modeKey = "sound",
-                modeLabel = "Sound",
-                soundEnabled = true,
-                vibrationEnabled = false,
-                soundAttributes = soundAttributes
-            )
+                createChannel(
+                    manager = manager,
+                    ringtoneKey = ringtoneKey,
+                    ringtoneLabel = ringtoneLabel,
+                    modeKey = "sound",
+                    modeLabel = "Sound",
+                    soundEnabled = true,
+                    vibrationEnabled = false,
+                    soundUri = soundUri,
+                    soundAttributes = soundAttributes
+                )
 
-            createChannel(
-                manager = manager,
-                ringtone = ringtone,
-                modeKey = "vibrate",
-                modeLabel = "Vibration",
-                soundEnabled = false,
-                vibrationEnabled = true,
-                soundAttributes = soundAttributes
-            )
+                createChannel(
+                    manager = manager,
+                    ringtoneKey = ringtoneKey,
+                    ringtoneLabel = ringtoneLabel,
+                    modeKey = "vibrate",
+                    modeLabel = "Vibration",
+                    soundEnabled = false,
+                    vibrationEnabled = true,
+                    soundUri = soundUri,
+                    soundAttributes = soundAttributes
+                )
 
-            createChannel(
-                manager = manager,
-                ringtone = ringtone,
-                modeKey = "silent",
-                modeLabel = "Silent",
-                soundEnabled = false,
-                vibrationEnabled = false,
-                soundAttributes = soundAttributes
-            )
+                createChannel(
+                    manager = manager,
+                    ringtoneKey = ringtoneKey,
+                    ringtoneLabel = ringtoneLabel,
+                    modeKey = "silent",
+                    modeLabel = "Silent",
+                    soundEnabled = false,
+                    vibrationEnabled = false,
+                    soundUri = soundUri,
+                    soundAttributes = soundAttributes
+                )
+            }
         }
     }
 
+    @RequiresApi(Build.VERSION_CODES.O)
     private fun createChannel(
         manager: NotificationManager,
-        ringtone: RingtoneConfig,
+        ringtoneKey: String,
+        ringtoneLabel: String,
         modeKey: String,
         modeLabel: String,
         soundEnabled: Boolean,
         vibrationEnabled: Boolean,
+        soundUri: Uri,
         soundAttributes: AudioAttributes
     ) {
         val channelId =
-            "${CHANNEL_PREFIX}_${ringtone.key}_${modeKey}"
+            "${CHANNEL_PREFIX}_${ringtoneKey}_$modeKey"
 
         val channel = NotificationChannel(
             channelId,
-            "AquaDaily • ${ringtone.label} • $modeLabel",
+            "AquaDaily • $ringtoneLabel • $modeLabel",
             NotificationManager.IMPORTANCE_HIGH
-        ).apply {
-            description = "Pengingat minum air AquaDaily"
-            lockscreenVisibility = NotificationCompat.VISIBILITY_PUBLIC
-            enableVibration(vibrationEnabled)
+        )
 
-            if (vibrationEnabled) {
-                vibrationPattern = VIBRATION_PATTERN
-            }
+        channel.description = "Pengingat minum air AquaDaily"
+        channel.lockscreenVisibility =
+            NotificationCompat.VISIBILITY_PUBLIC
+        channel.enableVibration(vibrationEnabled)
 
-            if (soundEnabled) {
-                setSound(ringtone.sound, soundAttributes)
-            } else {
-                setSound(null, null)
-            }
+        if (vibrationEnabled) {
+            channel.vibrationPattern = VIBRATION_PATTERN
+        }
+
+        if (soundEnabled) {
+            channel.setSound(
+                soundUri,
+                soundAttributes
+            )
+        } else {
+            channel.setSound(null, null)
         }
 
         manager.createNotificationChannel(channel)
     }
 
-    private fun resolveChannelId(
-        preferences: PreferencesManager
+    private fun buildChannelId(
+        ringtoneKey: String,
+        soundEnabled: Boolean,
+        vibrationEnabled: Boolean
     ): String {
-        val ringtoneKey = preferences.getNotificationRingtone()
-
-        val modeKey = when {
-            preferences.isNotificationSoundEnabled() &&
-                preferences.isNotificationVibrateEnabled() -> {
-                "sound_vibrate"
-            }
-
-            preferences.isNotificationSoundEnabled() -> {
-                "sound"
-            }
-
-            preferences.isNotificationVibrateEnabled() -> {
-                "vibrate"
-            }
-
-            else -> {
-                "silent"
-            }
+        val mode = when {
+            soundEnabled && vibrationEnabled -> "sound_vibrate"
+            soundEnabled -> "sound"
+            vibrationEnabled -> "vibrate"
+            else -> "silent"
         }
 
-        return "${CHANNEL_PREFIX}_${ringtoneKey}_$modeKey"
+        return "${CHANNEL_PREFIX}_${ringtoneKey}_$mode"
     }
 
     private fun resolveRawSound(rawName: String): Uri? {
@@ -271,10 +279,4 @@ class NotificationHelper(private val context: Context) {
             "android.resource://${context.packageName}/$resourceId"
         )
     }
-
-    private data class RingtoneConfig(
-        val key: String,
-        val label: String,
-        val sound: Uri
-    )
 }
