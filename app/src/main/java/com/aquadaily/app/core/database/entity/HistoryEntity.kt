@@ -9,6 +9,8 @@ data class HistoryEntity(
     @PrimaryKey(autoGenerate = true)
     val id: Int = 0,
 
+    val userId: Int,
+
     val date: String,
 
     val time: String,
