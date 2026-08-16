@@ -87,9 +87,36 @@
                     android:layout_alignParentEnd="true" />
             </RelativeLayout>
 
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:text="Pilih Ringtone"
+                android:textColor="@color/black"
+                android:textSize="14sp"
+                android:textStyle="bold" />
+
+            <com.google.android.material.card.MaterialCardView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                app:cardCornerRadius="12dp"
+                app:cardElevation="0dp"
+                app:strokeColor="#D1E4FF"
+                app:strokeWidth="1dp">
+
+                <Spinner
+                    android:id="@+id/spinnerRingtone"
+                    android:layout_width="match_parent"
+                    android:layout_height="52dp"
+                    android:entries="@array/notification_ringtone_options"
+                    android:paddingHorizontal="12dp" />
+            </com.google.android.material.card.MaterialCardView>
+
             <View
                 android:layout_width="match_parent"
                 android:layout_height="1dp"
+                android:layout_marginTop="12dp"
                 android:background="#EEEEEE" />
 
             <RelativeLayout
@@ -120,7 +147,7 @@
         android:layout_height="wrap_content"
         android:layout_marginTop="16dp"
         android:layout_marginHorizontal="8dp"
-        android:text="Notifikasi membantu Anda tetap terhidrasi dengan mengingatkan Anda untuk minum air pada interval yang ditentukan."
+        android:text="Pilih suara default atau ringtone AquaDaily. Brand New Day tersedia setelah file brand_new_day.mp3 ditambahkan ke res/raw."
         android:textColor="#757575"
         android:textSize="14sp" />
 
