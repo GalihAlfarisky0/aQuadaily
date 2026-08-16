@@ -2,23 +2,31 @@ package com.aquadaily.app.ui.login
 
 import android.content.Intent
 import android.os.Bundle
-import androidx.appcompat.app.AppCompatActivity
-import com.aquadaily.app.databinding.ActivityLoginBinding
-import com.aquadaily.app.core.preferences.PreferencesManager
-import com.aquadaily.app.ui.dashboard.DashboardActivity
-
+import android.text.InputType
 import android.widget.Toast
+import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.lifecycleScope
 import com.aquadaily.app.R
+import com.aquadaily.app.core.auth.PasswordHasher
+import com.aquadaily.app.core.database.AppDatabase
+import com.aquadaily.app.core.preferences.PreferencesManager
+import com.aquadaily.app.databinding.ActivityLoginBinding
+import com.aquadaily.app.ui.auth.RegisterActivity
+import com.aquadaily.app.ui.dashboard.DashboardActivity
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions
 import com.google.android.gms.common.api.ApiException
-
-import com.aquadaily.app.ui.auth.RegisterActivity
+import kotlinx.coroutines.launch
 
 class LoginActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityLoginBinding
     private lateinit var preferences: PreferencesManager
+    private val userRepository by lazy {
+        com.aquadaily.app.core.repository.UserRepository(
+            AppDatabase.getInstance(applicationContext).userDao()
+        )
+    }
 
     private val googleSignInLauncher = registerForActivityResult(
         androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()
@@ -27,9 +35,24 @@ class LoginActivity : AppCompatActivity() {
             val task = GoogleSignIn.getSignedInAccountFromIntent(result.data)
             try {
                 val account = task.getResult(ApiException::class.java)
-                // Successfully signed in
-                Toast.makeText(this, "Welcome, ${account.displayName}!", Toast.LENGTH_SHORT).show()
-                navigateToDashboard()
+                val email = account.email?.trim().orEmpty()
+                if (email.isEmpty()) {
+                    Toast.makeText(this, "Google account has no email", Toast.LENGTH_SHORT).show()
+                    return@registerForActivityResult
+                }
+
+                lifecycleScope.launch {
+                    val user = userRepository.getUserByEmail(email)
+                    if (user == null || user.passwordHash.isEmpty()) {
+                        Toast.makeText(
+                            this@LoginActivity,
+                            "Account not registered. Create an account first.",
+                            Toast.LENGTH_LONG
+                        ).show()
+                    } else {
+                        loginSuccess(user.id, user.name, user.email)
+                    }
+                }
             } catch (e: ApiException) {
                 Toast.makeText(this, "Google sign in failed: ${e.message}", Toast.LENGTH_SHORT).show()
             }
@@ -40,9 +63,7 @@ class LoginActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         binding = ActivityLoginBinding.inflate(layoutInflater)
         setContentView(binding.root)
-
         preferences = PreferencesManager(this)
-
         initView()
     }
 
@@ -50,7 +71,7 @@ class LoginActivity : AppCompatActivity() {
         supportActionBar?.hide()
 
         binding.btnSignIn.setOnClickListener {
-            navigateToDashboard()
+            performLogin()
         }
 
         binding.btnGoogle.setOnClickListener {
@@ -70,26 +91,52 @@ class LoginActivity : AppCompatActivity() {
         }
     }
 
+    private fun performLogin() {
+        val email = binding.etEmail.text.toString().trim()
+        val password = binding.etPassword.text.toString()
+
+        if (email.isEmpty() || password.isEmpty()) {
+            Toast.makeText(this, "Enter email and password", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        lifecycleScope.launch {
+            val user = userRepository.getUserByEmail(email)
+
+            when {
+                user == null -> {
+                    Toast.makeText(
+                        this@LoginActivity,
+                        "Account not found. Create an account first.",
+                        Toast.LENGTH_LONG
+                    ).show()
+                }
+                user.passwordHash.isEmpty() -> {
+                    Toast.makeText(
+                        this@LoginActivity,
+                        "This account needs to be registered again.",
+                        Toast.LENGTH_LONG
+                    ).show()
+                }
+                user.passwordHash != PasswordHasher.hash(password) -> {
+                    Toast.makeText(
+                        this@LoginActivity,
+                        "Incorrect email or password",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
+                else -> {
+                    loginSuccess(user.id, user.name, user.email)
+                }
+            }
+        }
+    }
+
     private fun showForgotPasswordDialog() {
         val builder = android.app.AlertDialog.Builder(this)
         builder.setTitle("Forgot Password")
-        builder.setMessage("Enter your email to reset password")
-
-        val input = android.widget.EditText(this)
-        input.inputType = android.text.InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS
-        builder.setView(input)
-
-        builder.setPositiveButton("Reset") { dialog, _ ->
-            val email = input.text.toString()
-            if (email.isNotEmpty()) {
-                Toast.makeText(this, "Reset link sent to $email", Toast.LENGTH_SHORT).show()
-            }
-            dialog.dismiss()
-        }
-        builder.setNegativeButton("Cancel") { dialog, _ ->
-            dialog.cancel()
-        }
-
+        builder.setMessage("Password reset is not available for local accounts yet.")
+        builder.setPositiveButton("OK", null)
         builder.show()
     }
 
@@ -97,25 +144,31 @@ class LoginActivity : AppCompatActivity() {
         val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
             .requestEmail()
             .build()
-
-        val mGoogleSignInClient = GoogleSignIn.getClient(this, gso)
-        googleSignInLauncher.launch(mGoogleSignInClient.signInIntent)
+        val client = GoogleSignIn.getClient(this, gso)
+        googleSignInLauncher.launch(client.signInIntent)
     }
 
     private fun togglePasswordVisibility() {
-        val inputType = binding.etPassword.inputType
-        if (inputType == android.text.InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD) {
-            binding.etPassword.inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
-            binding.btnTogglePassword.alpha = 0.3f
+        val currentlyVisible =
+            binding.etPassword.inputType == InputType.TYPE_CLASS_TEXT or
+                InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD
+
+        binding.etPassword.inputType = if (currentlyVisible) {
+            InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
         } else {
-            binding.etPassword.inputType = android.text.InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD
-            binding.btnTogglePassword.alpha = 1.0f
+            InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD
         }
+
+        binding.btnTogglePassword.alpha = if (currentlyVisible) 0.3f else 1f
         binding.etPassword.setSelection(binding.etPassword.text.length)
     }
 
-    private fun navigateToDashboard() {
+    private fun loginSuccess(userId: Int, name: String, email: String) {
+        preferences.setCurrentUserId(userId)
+        preferences.setUserName(name)
+        preferences.setEmail(email)
         preferences.setLoggedIn(true)
+
         startActivity(Intent(this, DashboardActivity::class.java))
         overridePendingTransition(R.anim.slide_in_right, R.anim.slide_out_left)
         finish()
