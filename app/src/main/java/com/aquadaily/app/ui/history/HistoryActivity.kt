@@ -96,16 +96,14 @@ class HistoryActivity : AppCompatActivity() {
     private fun observeData() {
         val dailyTarget = preferences.getWaterTarget()
 
-        viewModel.allHistory.observe(this) { history ->
-            historyRecordAdapter.submitList(history)
-        }
-
         viewModel.getDailyWater().observe(this) { dailyData ->
             if (!dailyData.isNullOrEmpty()) {
+                historyRecordAdapter.submitList(dailyData.reversed())
                 updateStats(dailyData, dailyTarget)
                 viewModel.calculateStreak(dailyData, dailyTarget)
                 if (binding.chipWeekly.isChecked) setupWeeklyChart(dailyData.takeLast(7))
             } else {
+                historyRecordAdapter.submitList(emptyList())
                 updateStats(emptyList(), dailyTarget)
                 viewModel.calculateStreak(emptyList(), dailyTarget)
             }
