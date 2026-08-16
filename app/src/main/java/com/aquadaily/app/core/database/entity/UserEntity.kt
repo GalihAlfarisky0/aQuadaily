@@ -9,9 +9,10 @@ data class UserEntity(
     val id: Int = 0,
     val name: String,
     val email: String,
-    val gender: String, // "Female" or "Male"
-    val age: Int,
-    val weight: Double,
+    val gender: String = "",
+    val age: Int = 0,
+    val weight: Double = 0.0,
+    val passwordHash: String = "",
     val profileImage: String? = null,
     val streak: Int = 0
 )
