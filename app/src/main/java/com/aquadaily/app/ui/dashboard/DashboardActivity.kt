@@ -9,6 +9,7 @@ import android.view.View
 import android.view.ViewGroup
 import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.asLiveData
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.aquadaily.app.R
@@ -107,7 +108,7 @@ class DashboardActivity : AppCompatActivity() {
         val database = AppDatabase.getInstance(this)
         val userRepository = UserRepository(database.userDao())
         userRepository.getUserById(preferences.getCurrentUserId())
-            .collectAsLiveData()
+            .asLiveData()
             .observe(this) { user ->
                 if (user != null) {
                     binding.tvUserName.text = user.name
@@ -145,7 +146,11 @@ class DashboardActivity : AppCompatActivity() {
     private fun updateProgress(amount: Int) {
         binding.tvCurrentProgress.text = "$amount"
         val goal = preferences.getWaterTarget()
-        val targetProgress = if (goal > 0) (amount.toFloat() / goal * 100).toInt().coerceIn(0, 100) else 0
+        val targetProgress = if (goal > 0) {
+            (amount.toFloat() / goal * 100).toInt().coerceIn(0, 100)
+        } else {
+            0
+        }
         animateProgress(targetProgress)
         val remaining = goal - amount
         binding.tvRemaining.text = if (remaining > 0) "$remaining ml remaining" else "Goal reached!"
