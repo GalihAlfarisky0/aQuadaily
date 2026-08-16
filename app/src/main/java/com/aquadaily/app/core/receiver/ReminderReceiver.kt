@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import com.aquadaily.app.App
 import com.aquadaily.app.core.notification.NotificationHelper
+import com.aquadaily.app.core.preferences.PreferencesManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -16,13 +17,20 @@ class ReminderReceiver : BroadcastReceiver() {
         intent: Intent
     ) {
         val appContext = context.applicationContext
+        val preferences = PreferencesManager(appContext)
+        val currentUserId = preferences.getCurrentUserId()
+
+        if (currentUserId <= 0) {
+            return
+        }
 
         if (intent.action == Intent.ACTION_BOOT_COMPLETED) {
             val app = appContext as App
 
             CoroutineScope(Dispatchers.IO).launch {
                 val reminders =
-                    app.reminderRepository.getAllRemindersSync()
+                    app.reminderRepository
+                        .getAllRemindersSync(currentUserId)
 
                 reminders
                     .filter { it.isEnabled }
@@ -62,7 +70,7 @@ class ReminderReceiver : BroadcastReceiver() {
             CoroutineScope(Dispatchers.IO).launch {
                 val reminder =
                     app.reminderRepository
-                        .getReminderByIdSync(reminderId)
+                        .getReminderByIdSync(reminderId, currentUserId)
 
                 if (reminder?.isEnabled == true) {
                     app.alarmScheduler.schedule(reminder)
