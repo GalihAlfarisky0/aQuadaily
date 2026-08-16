@@ -10,11 +10,22 @@ import java.text.SimpleDateFormat
 import java.util.*
 
 class HistoryViewModel(
-    private val repository: HistoryRepository
+    private val repository: HistoryRepository,
+    private val userId: Int
 ) : ViewModel() {
 
     private val _streak = MutableLiveData<Int>()
     val streak: LiveData<Int> = _streak
+
+    private val _query = MutableLiveData("")
+
+    val allHistory: LiveData<List<HistoryEntity>> = _query.switchMap { query ->
+        if (query.isNullOrEmpty()) {
+            repository.getAllHistory(userId)
+        } else {
+            repository.searchHistory(userId, query)
+        }
+    }
 
     fun calculateStreak(dailyWaterList: List<DailyWater>, target: Int) {
         if (dailyWaterList.isEmpty()) {
@@ -23,13 +34,10 @@ class HistoryViewModel(
         }
 
         val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
-        val calendar = Calendar.getInstance()
         val waterMap = dailyWaterList.associateBy { it.date }
-        
         var currentStreak = 0
         val checkDate = Calendar.getInstance()
-        
-        // If today hasn't reached target, streak might still be active from yesterday
+
         val todayStr = sdf.format(checkDate.time)
         val todayWater = waterMap[todayStr]?.totalAmount ?: 0
         if (todayWater < target) {
@@ -37,8 +45,8 @@ class HistoryViewModel(
         }
 
         while (true) {
-            val dStr = sdf.format(checkDate.time)
-            val amount = waterMap[dStr]?.totalAmount ?: 0
+            val dateStr = sdf.format(checkDate.time)
+            val amount = waterMap[dateStr]?.totalAmount ?: 0
             if (amount >= target) {
                 currentStreak++
                 checkDate.add(Calendar.DAY_OF_YEAR, -1)
@@ -46,62 +54,41 @@ class HistoryViewModel(
                 break
             }
         }
-        _streak.value = currentStreak
-    }
 
-    private val _query = MutableLiveData<String>("")
-    
-    val allHistory: LiveData<List<HistoryEntity>> = _query.switchMap { q ->
-        if (q.isNullOrEmpty()) {
-            repository.allHistory
-        } else {
-            repository.searchHistory(q)
-        }
+        _streak.value = currentStreak
     }
 
     fun search(query: String) {
         _query.value = query
     }
 
-    fun getDailyWater(): LiveData<List<DailyWater>> {
-        return repository.getDailyWater()
-    }
+    fun getDailyWater(): LiveData<List<DailyWater>> =
+        repository.getDailyWater(userId)
 
-    fun getMonthlyWater(): LiveData<List<MonthlyWater>> {
-        return repository.getMonthlyWater()
-    }
+    fun getMonthlyWater(): LiveData<List<MonthlyWater>> =
+        repository.getMonthlyWater(userId)
 
-    fun getHistoryByDate(
-        date: String
-    ): LiveData<List<HistoryEntity>> {
-        return repository.getHistoryByDate(date)
-    }
+    fun getHistoryByDate(date: String): LiveData<List<HistoryEntity>> =
+        repository.getHistoryByDate(userId, date)
 
-    fun insert(
-        history: HistoryEntity
-    ) {
+    fun insert(history: HistoryEntity) {
         viewModelScope.launch {
-            repository.insert(history)
+            repository.insert(history.copy(userId = userId))
         }
     }
 
-    fun update(
-        history: HistoryEntity
-    ) {
+    fun update(history: HistoryEntity) {
         viewModelScope.launch {
-            repository.update(history)
+            repository.update(history.copy(userId = userId))
         }
     }
 
-    fun delete(
-        history: HistoryEntity
-    ) {
+    fun delete(history: HistoryEntity) {
         viewModelScope.launch {
-            repository.delete(history)
+            repository.delete(history.copy(userId = userId))
         }
     }
 
-    suspend fun getHistoryById(id: Int): HistoryEntity? {
-        return repository.getHistoryById(id)
-    }
+    suspend fun getHistoryById(id: Int): HistoryEntity? =
+        repository.getHistoryById(id, userId)
 }
