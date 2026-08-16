@@ -3,18 +3,22 @@
     android:height="120dp"
     android:viewportWidth="100"
     android:viewportHeight="100">
+
+    <!-- Outer droplet: intentionally inset to leave balanced breathing room -->
     <path
-        android:pathData="M50,15 C50,15 25,45 25,65 C25,78.8 36.2,90 50,90 C63.8,90 75,78.8 75,65 C75,45 50,15 50,15 Z"
+        android:pathData="M50,21 C50,21 29,47 29,64 C29,76.7 38.4,86 50,86 C61.6,86 71,76.7 71,64 C71,47 50,21 50,21 Z"
         android:strokeColor="#1E88E5"
-        android:strokeWidth="6"
+        android:strokeWidth="5"
         android:strokeLineCap="round"
         android:strokeLineJoin="round"
-        android:fillColor="#00000000"/>
+        android:fillColor="#00000000" />
+
+    <!-- Inner droplet: centered with additional vertical clearance -->
     <path
-        android:pathData="M50,35 C50,35 38,50 38,65 C38,71.6 43.4,77 50,77 C56.6,77 62,71.6 62,65 C62,50 50,35 50,35 Z"
+        android:pathData="M50,39 C50,39 40,52 40,64 C40,69.5 44.5,74 50,74 C55.5,74 60,69.5 60,64 C60,52 50,39 50,39 Z"
         android:strokeColor="#1E88E5"
-        android:strokeWidth="4"
+        android:strokeWidth="3.5"
         android:strokeLineCap="round"
         android:strokeLineJoin="round"
-        android:fillColor="#00000000"/>
+        android:fillColor="#00000000" />
 </vector>
