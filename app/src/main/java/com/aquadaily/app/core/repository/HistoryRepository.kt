@@ -10,58 +10,36 @@ class HistoryRepository(
     private val historyDao: HistoryDao
 ) {
 
-    val allHistory: LiveData<List<HistoryEntity>> =
-        historyDao.getAllHistory()
+    fun getAllHistory(userId: Int): LiveData<List<HistoryEntity>> =
+        historyDao.getAllHistory(userId)
 
-    fun getHistoryByDate(
-        date: String
-    ): LiveData<List<HistoryEntity>> {
+    fun getHistoryByDate(userId: Int, date: String): LiveData<List<HistoryEntity>> =
+        historyDao.getHistoryByDate(userId, date)
 
-        return historyDao.getHistoryByDate(date)
-    }
+    fun searchHistory(userId: Int, query: String): LiveData<List<HistoryEntity>> =
+        historyDao.searchHistory(userId, query)
 
-    fun searchHistory(
-        query: String
-    ): LiveData<List<HistoryEntity>> {
-
-        return historyDao.searchHistory(query)
-    }
-
-    suspend fun insert(
-        history: HistoryEntity
-    ) {
+    suspend fun insert(history: HistoryEntity) =
         historyDao.insertHistory(history)
-    }
 
-    suspend fun update(
-        history: HistoryEntity
-    ) {
+    suspend fun update(history: HistoryEntity) =
         historyDao.updateHistory(history)
-    }
 
-    suspend fun delete(
-        history: HistoryEntity
-    ) {
+    suspend fun delete(history: HistoryEntity) =
         historyDao.deleteHistory(history)
-    }
 
-    suspend fun getHistoryById(id: Int): HistoryEntity? {
-        return historyDao.getHistoryById(id)
-    }
+    suspend fun getHistoryById(id: Int, userId: Int): HistoryEntity? =
+        historyDao.getHistoryById(id, userId)
 
-    suspend fun clearHistory() {
-        historyDao.clearHistory()
-    }
+    suspend fun clearHistory(userId: Int) =
+        historyDao.clearHistory(userId)
 
-    fun getTotalWaterByDate(date: String): LiveData<Int?> {
-        return historyDao.getTotalWaterByDate(date)
-    }
+    fun getTotalWaterByDate(userId: Int, date: String): LiveData<Int?> =
+        historyDao.getTotalWaterByDate(userId, date)
 
-    fun getDailyWater(): LiveData<List<DailyWater>> {
-        return historyDao.getDailyWater()
-    }
+    fun getDailyWater(userId: Int): LiveData<List<DailyWater>> =
+        historyDao.getDailyWater(userId)
 
-    fun getMonthlyWater(): LiveData<List<MonthlyWater>> {
-        return historyDao.getMonthlyWater()
-    }
+    fun getMonthlyWater(userId: Int): LiveData<List<MonthlyWater>> =
+        historyDao.getMonthlyWater(userId)
 }
