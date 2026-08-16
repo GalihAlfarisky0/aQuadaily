@@ -6,18 +6,27 @@ import kotlinx.coroutines.flow.Flow
 
 class ReminderRepository(private val reminderDao: ReminderDao) {
 
-    fun getAllReminders(): Flow<List<ReminderEntity>> = reminderDao.getAllReminders()
+    fun getAllReminders(userId: Int): Flow<List<ReminderEntity>> =
+        reminderDao.getAllReminders(userId)
 
-    suspend fun getAllRemindersSync(): List<ReminderEntity> = reminderDao.getAllRemindersSync()
+    suspend fun getAllRemindersSync(userId: Int): List<ReminderEntity> =
+        reminderDao.getAllRemindersSync(userId)
 
-    suspend fun getReminderByIdSync(id: Int): ReminderEntity? = reminderDao.getReminderByIdSync(id)
+    suspend fun getReminderByIdSync(id: Int, userId: Int): ReminderEntity? =
+        reminderDao.getReminderByIdSync(id, userId)
 
-    suspend fun insertReminder(reminder: ReminderEntity): Long = reminderDao.insertReminder(reminder)
+    suspend fun insertReminder(reminder: ReminderEntity): Long =
+        reminderDao.insertReminder(reminder)
 
-    suspend fun updateReminder(reminder: ReminderEntity) = reminderDao.updateReminder(reminder)
+    suspend fun updateReminder(reminder: ReminderEntity) =
+        reminderDao.updateReminder(reminder)
 
-    suspend fun deleteReminder(reminder: ReminderEntity) = reminderDao.deleteReminder(reminder)
+    suspend fun deleteReminder(reminder: ReminderEntity) =
+        reminderDao.deleteReminder(reminder)
 
-    suspend fun updateReminderStatus(id: Int, isEnabled: Boolean) = 
-        reminderDao.updateReminderStatus(id, isEnabled)
+    suspend fun updateReminderStatus(id: Int, userId: Int, isEnabled: Boolean) =
+        reminderDao.updateReminderStatus(id, userId, isEnabled)
+
+    suspend fun clearReminders(userId: Int) =
+        reminderDao.clearReminders(userId)
 }
