@@ -9,21 +9,24 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.Observer
 import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.lifecycleScope
 import com.aquadaily.app.core.database.AppDatabase
 import com.aquadaily.app.core.database.entity.UserEntity
+import com.aquadaily.app.core.preferences.PreferencesManager
 import com.aquadaily.app.core.repository.HistoryRepository
 import com.aquadaily.app.core.repository.ReminderRepository
 import com.aquadaily.app.core.repository.UserRepository
-import com.aquadaily.app.core.preferences.PreferencesManager
 import com.aquadaily.app.databinding.ActivityEditProfileBinding
 import com.aquadaily.app.ui.settings.SettingsViewModel
 import com.aquadaily.app.ui.settings.SettingsViewModelFactory
 import com.bumptech.glide.Glide
+import kotlinx.coroutines.launch
 
 class EditProfileActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityEditProfileBinding
     private lateinit var viewModel: SettingsViewModel
+    private lateinit var userRepository: UserRepository
     private var currentUser: UserEntity? = null
     private var selectedImageUri: Uri? = null
 
@@ -63,7 +66,7 @@ class EditProfileActivity : AppCompatActivity() {
         }
 
         val database = AppDatabase.getInstance(this)
-        val userRepository = UserRepository(database.userDao())
+        userRepository = UserRepository(database.userDao())
         val historyRepository = HistoryRepository(database.historyDao())
         val reminderRepository = ReminderRepository(database.reminderDao())
         val factory = SettingsViewModelFactory(
@@ -82,12 +85,9 @@ class EditProfileActivity : AppCompatActivity() {
 
     private fun setupGenderSpinner() {
         val genders = arrayOf("Male", "Female")
-        val adapter = ArrayAdapter(
-            this,
-            android.R.layout.simple_dropdown_item_1line,
-            genders
+        binding.actvGender.setAdapter(
+            ArrayAdapter(this, android.R.layout.simple_dropdown_item_1line, genders)
         )
-        binding.actvGender.setAdapter(adapter)
     }
 
     private fun setupObservers() {
@@ -128,7 +128,6 @@ class EditProfileActivity : AppCompatActivity() {
 
     private fun saveProfile() {
         val user = currentUser ?: return
-
         val name = binding.etName.text.toString().trim()
         val email = binding.etEmail.text.toString().trim()
         val gender = binding.actvGender.text.toString()
@@ -147,26 +146,34 @@ class EditProfileActivity : AppCompatActivity() {
         }
         binding.inputEmail.error = null
 
-        val updatedUser = user.copy(
-            name = name,
-            email = email,
-            gender = gender,
-            age = age,
-            weight = weight,
-            profileImage = selectedImageUri?.toString() ?: user.profileImage
-        )
+        lifecycleScope.launch {
+            val emailOwner = userRepository.getUserByEmail(email)
+            if (emailOwner != null && emailOwner.id != user.id) {
+                binding.inputEmail.error = "Email is already used by another account"
+                return@launch
+            }
 
-        viewModel.updateUser(updatedUser)
+            val updatedUser = user.copy(
+                name = name,
+                email = email,
+                gender = gender,
+                age = age,
+                weight = weight,
+                profileImage = selectedImageUri?.toString() ?: user.profileImage
+            )
 
-        val preferences = PreferencesManager(this)
-        preferences.setUserName(name)
-        preferences.setEmail(email)
+            viewModel.updateUser(updatedUser)
 
-        Toast.makeText(
-            this,
-            "Profile updated successfully",
-            Toast.LENGTH_SHORT
-        ).show()
-        finish()
+            val preferences = PreferencesManager(this@EditProfileActivity)
+            preferences.setUserName(name)
+            preferences.setEmail(email)
+
+            Toast.makeText(
+                this@EditProfileActivity,
+                "Profile updated successfully",
+                Toast.LENGTH_SHORT
+            ).show()
+            finish()
+        }
     }
 }
