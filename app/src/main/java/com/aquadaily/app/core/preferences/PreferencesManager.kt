@@ -88,6 +88,26 @@ class PreferencesManager(context: Context) {
         return preferences.getBoolean(userKey(KEY_NOTIFICATION_VIBRATE), true)
     }
 
+    fun setNotificationSoundUri(uri: String?) {
+        val editor = preferences.edit()
+        if (uri.isNullOrBlank()) {
+            editor.remove(userKey(KEY_NOTIFICATION_SOUND_URI))
+        } else {
+            editor.putString(userKey(KEY_NOTIFICATION_SOUND_URI), uri)
+        }
+        editor.apply()
+    }
+
+    fun getNotificationSoundUri(): String? =
+        preferences.getString(userKey(KEY_NOTIFICATION_SOUND_URI), null)
+
+    fun setNotificationSoundName(name: String) {
+        preferences.edit().putString(userKey(KEY_NOTIFICATION_SOUND_NAME), name).apply()
+    }
+
+    fun getNotificationSoundName(): String =
+        preferences.getString(userKey(KEY_NOTIFICATION_SOUND_NAME), "Suara bawaan") ?: "Suara bawaan"
+
     fun setLoggedIn(value: Boolean) {
         preferences.edit().putBoolean(KEY_LOGGED_IN, value).apply()
     }
@@ -124,6 +144,8 @@ class PreferencesManager(context: Context) {
         private const val KEY_NOTIFICATIONS_ENABLED = "notifications_enabled"
         private const val KEY_NOTIFICATION_SOUND = "notification_sound"
         private const val KEY_NOTIFICATION_VIBRATE = "notification_vibrate"
+        private const val KEY_NOTIFICATION_SOUND_URI = "notification_sound_uri"
+        private const val KEY_NOTIFICATION_SOUND_NAME = "notification_sound_name"
         private const val KEY_LOGGED_IN = "logged_in"
     }
 }
