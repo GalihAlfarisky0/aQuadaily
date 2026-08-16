@@ -11,9 +11,10 @@ interface HistoryDao {
 
     @Query("""
         SELECT * FROM history
+        WHERE userId = :userId
         ORDER BY date DESC, time DESC
     """)
-    fun getAllHistory(): LiveData<List<HistoryEntity>>
+    fun getAllHistory(userId: Int): LiveData<List<HistoryEntity>>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertHistory(history: HistoryEntity)
@@ -26,62 +27,60 @@ interface HistoryDao {
 
     @Query("""
         SELECT * FROM history
-        WHERE date = :date
+        WHERE userId = :userId
+        AND date = :date
         ORDER BY time DESC
     """)
-    fun getHistoryByDate(
-        date: String
-    ): LiveData<List<HistoryEntity>>
+    fun getHistoryByDate(userId: Int, date: String): LiveData<List<HistoryEntity>>
 
     @Query("""
         SELECT * FROM history
-        WHERE date LIKE '%' || :query || '%'
-        OR time LIKE '%' || :query || '%'
-        OR note LIKE '%' || :query || '%'
-        OR CAST(amount AS TEXT) LIKE '%' || :query || '%'
+        WHERE userId = :userId
+        AND (
+            date LIKE '%' || :query || '%'
+            OR time LIKE '%' || :query || '%'
+            OR note LIKE '%' || :query || '%'
+            OR CAST(amount AS TEXT) LIKE '%' || :query || '%'
+        )
         ORDER BY date DESC, time DESC
     """)
-    fun searchHistory(
-        query: String
-    ): LiveData<List<HistoryEntity>>
+    fun searchHistory(userId: Int, query: String): LiveData<List<HistoryEntity>>
 
-    @Query("SELECT * FROM history WHERE id = :id")
-    suspend fun getHistoryById(id: Int): HistoryEntity?
+    @Query("SELECT * FROM history WHERE id = :id AND userId = :userId")
+    suspend fun getHistoryById(id: Int, userId: Int): HistoryEntity?
 
-    @Query("DELETE FROM history")
-    suspend fun clearHistory()
+    @Query("DELETE FROM history WHERE userId = :userId")
+    suspend fun clearHistory(userId: Int)
 
     @Query("""
         SELECT date, SUM(amount) AS totalAmount
         FROM history
+        WHERE userId = :userId
         GROUP BY date
         ORDER BY date ASC
     """)
-    fun getDailyWater(): LiveData<List<DailyWater>>
+    fun getDailyWater(userId: Int): LiveData<List<DailyWater>>
 
-    @Query("SELECT SUM(amount) FROM history WHERE date = :date")
-    fun getTotalWaterByDate(date: String): LiveData<Int?>
+    @Query("SELECT SUM(amount) FROM history WHERE userId = :userId AND date = :date")
+    fun getTotalWaterByDate(userId: Int, date: String): LiveData<Int?>
 
     @Query("""
         SELECT date, SUM(amount) AS totalAmount
         FROM history
-        WHERE date >= :startDate
+        WHERE userId = :userId
+        AND date >= :startDate
         AND date <= :endDate
         GROUP BY date
         ORDER BY date ASC
     """)
-    fun getWeeklyWater(
-        startDate: String,
-        endDate: String
-    ): LiveData<List<DailyWater>>
+    fun getWeeklyWater(userId: Int, startDate: String, endDate: String): LiveData<List<DailyWater>>
 
     @Query("""
-        SELECT 
-            substr(date, 1, 7) AS month,
-            SUM(amount) AS totalAmount
+        SELECT substr(date, 1, 7) AS month, SUM(amount) AS totalAmount
         FROM history
+        WHERE userId = :userId
         GROUP BY substr(date, 1, 7)
         ORDER BY month ASC
     """)
-    fun getMonthlyWater(): LiveData<List<MonthlyWater>>
+    fun getMonthlyWater(userId: Int): LiveData<List<MonthlyWater>>
 }
