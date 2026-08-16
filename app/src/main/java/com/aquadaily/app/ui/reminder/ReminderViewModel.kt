@@ -11,34 +11,39 @@ import kotlinx.coroutines.launch
 
 class ReminderViewModel(
     private val repository: ReminderRepository,
-    private val alarmScheduler: AlarmScheduler
+    private val alarmScheduler: AlarmScheduler,
+    private val userId: Int
 ) : ViewModel() {
 
-    val allReminders = repository.getAllReminders().asLiveData()
+    val allReminders = repository.getAllReminders(userId).asLiveData()
 
     fun insertReminder(reminder: ReminderEntity) = viewModelScope.launch {
-        val id = repository.insertReminder(reminder)
-        if (reminder.isEnabled) {
-            alarmScheduler.schedule(reminder.copy(id = id.toInt()))
+        if (userId <= 0) return@launch
+        val userReminder = reminder.copy(userId = userId)
+        val id = repository.insertReminder(userReminder)
+        if (userReminder.isEnabled) {
+            alarmScheduler.schedule(userReminder.copy(id = id.toInt()))
         }
     }
 
     fun updateReminder(reminder: ReminderEntity) = viewModelScope.launch {
-        repository.updateReminder(reminder)
-        if (reminder.isEnabled) {
-            alarmScheduler.schedule(reminder)
+        val userReminder = reminder.copy(userId = userId)
+        repository.updateReminder(userReminder)
+        if (userReminder.isEnabled) {
+            alarmScheduler.schedule(userReminder)
         } else {
-            alarmScheduler.cancel(reminder)
+            alarmScheduler.cancel(userReminder)
         }
     }
 
     fun deleteReminder(reminder: ReminderEntity) = viewModelScope.launch {
-        repository.deleteReminder(reminder)
-        alarmScheduler.cancel(reminder)
+        val userReminder = reminder.copy(userId = userId)
+        repository.deleteReminder(userReminder)
+        alarmScheduler.cancel(userReminder)
     }
 
     fun updateReminderStatus(reminder: ReminderEntity, isEnabled: Boolean) = viewModelScope.launch {
-        val updatedReminder = reminder.copy(isEnabled = isEnabled)
+        val updatedReminder = reminder.copy(userId = userId, isEnabled = isEnabled)
         repository.updateReminder(updatedReminder)
         if (isEnabled) {
             alarmScheduler.schedule(updatedReminder)
@@ -49,12 +54,13 @@ class ReminderViewModel(
 
     class Factory(
         private val repository: ReminderRepository,
-        private val alarmScheduler: AlarmScheduler
+        private val alarmScheduler: AlarmScheduler,
+        private val userId: Int
     ) : ViewModelProvider.Factory {
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
             if (modelClass.isAssignableFrom(ReminderViewModel::class.java)) {
                 @Suppress("UNCHECKED_CAST")
-                return ReminderViewModel(repository, alarmScheduler) as T
+                return ReminderViewModel(repository, alarmScheduler, userId) as T
             }
             throw IllegalArgumentException("Unknown ViewModel class")
         }
